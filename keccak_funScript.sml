@@ -1,5 +1,6 @@
 open HolKernel Parse boolLib bossLib;
 open arithmeticTheory wordsTheory listTheory wordsLib lcsymtacs;
+val _ = numLib.prefer_num()
 (* interactive use:
 app load ["arithmeticTheory", "wordsTheory", "listTheory","wordsLib","lcsymtacs"];
 *)
@@ -12,7 +13,7 @@ val _ = new_theory "keccak_fun";
 (* Matrix access. Note that the outer list is accessed via y coordinates, the
 * lists within by x coordinates *)
 val list_apply_numbered_def = Define`
-  list_apply_numbered f lst = 
+  list_apply_numbered f lst =
     case
       (FOLDR (\ el (x,acc_list) . (x-1,((f x el)::acc_list))) ((LENGTH
       lst)-1,[]) lst)
@@ -102,21 +103,21 @@ val rc_def = Define `
 
 (* First transformation: Theta *)
 val theta_matc_def = Define`
-    theta_matc mat x = 
+    theta_matc mat x = (
         (matrix_el mat x 0)
-      ??(matrix_el mat x 1) 
-      ??(matrix_el mat x 2) 
-      ??(matrix_el mat x 3) 
-      ??(matrix_el mat x 4) 
+      ??(matrix_el mat x 1)
+      ??(matrix_el mat x 2)
+      ??(matrix_el mat x 3)
+      ??(matrix_el mat x 4))
     `;
 
 val theta_matd_def = Define`
-    theta_matd mat x = (theta_matc mat ( (x+4) MOD 5)) ?? ((theta_matc mat (x+1 MOD 5))
+    theta_matd mat x = ((theta_matc mat ( (x+4) MOD 5)) ?? ((theta_matc mat (x+1 MOD 5)))
     #<< 1)
-    `; 
+    `;
 
 val theta_def = Define`
-    theta mat = matrix_apply (\ x y el. el ?? (theta_matd mat x)) mat 
+    theta mat = matrix_apply (\ x y el. el ?? (theta_matd mat x)) mat
     `;
 
 (* Second, third and fourth transformation combined *)
@@ -128,7 +129,7 @@ val theta_def = Define`
 *   (We refer to Matrix B as in the implementation overview Document )
 *)
 val rapac_coordinate_helper_def = Define`
-    rapac_coordinate_helper mat n= 
+    rapac_coordinate_helper mat n=
     let x=n DIV 5
     and y=(n MOD 5)
     in
@@ -142,19 +143,19 @@ val rapac_matB_list = Define`
 
 (* Find out which value is written into given coordinates in Matrix B *)
 val rapac_matB_def = Define `
-    rapac_matB matB_list coord = 
+    rapac_matB matB_list coord =
         case HD(FILTER (\ (c,wildcard). c=coord) matB_list) of
              (_,value) => value
              `
 (* Compute the three steps using a representation of Matrix B as a list of pairs
 * with coordinates and values *)
 val rapac_compute_def = Define `
-    rapac_compute mat = 
+    rapac_compute mat =
         let empty_matrix = GENLIST (\wildcard.GENLIST (\wildcard.F) 5) 5
           and matB_list = rapac_matB_list mat
         in
-          matrix_apply (\x y wildcard . 
-              (rapac_matB matB_list (x,y)) 
+          matrix_apply (\x y wildcard .
+              (rapac_matB matB_list (x,y))
            ?? (   ¬ (rapac_matB matB_list ((x+1) MOD 5, y))
                &&   (rapac_matB matB_list ((x+2) MOD 5, y))))
                empty_matrix
