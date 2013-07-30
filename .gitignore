@@ -1,0 +1,8 @@
+*Script
+*Theory.sig
+*Theory.sml
+*.uo
+*.ui
+*.o
+.HOLMK
+*heap
