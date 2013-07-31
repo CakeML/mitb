@@ -27,6 +27,10 @@ val matrix_apply_def = Define`
 val matrix_el_def = Define`
   matrix_el mat x y = EL (x MOD 5) (EL (y MOD 5) mat)`;
 
+val matrix_generate_def = Define`
+    matrix_generate f = GENLIST (\y.GENLIST (\x.f x y) 5) 5
+    `;
+
 (* Tranforming a bitstring into a matrix *)
 (* TODO *)
 (* Helper functions for matrix representation of list used in permutation *)
@@ -123,42 +127,51 @@ val theta_def = Define`
 (* Second, third and fourth transformation combined *)
 (* We call it rapac, because it is Rho And Pi And Chi combined. *)
 
-(* For every pair x and y, produce a pair consisting of:
-*   first: the coordinates to which the we have to write in Matrix B
-*   second: the value we put into those coordinates
-*   (We refer to Matrix B as in the implementation overview Document )
-*)
-val rapac_coordinate_helper_def = Define`
-    rapac_coordinate_helper mat n=
-    let x=n DIV 5
-    and y=(n MOD 5)
-    in
-      let coords_in_matB = (y,((2*x+3*y) MOD 5))
-    in
-        ( coords_in_matB, (matrix_el mat  x y) #<< (rot_table  x y ))
-        `;
+(* The following function describes the reverse of the mapping from (x,y) to
+* (y,2*x+3*y) as a table, which will be used to lookup values corresponding to
+* the Matrix B in the implementation overview. *)
 
-val rapac_matB_list = Define`
-    rapac_matB_list mat = GENLIST (rapac_coordinate_helper mat) 25`;
+val matB_table_def   = Define`
+    (matB_table 0 0 = (0, 0)  )
+ /\ (matB_table 0 1 = (3, 0)  )
+ /\ (matB_table 0 2 = (1, 0)  )
+ /\ (matB_table 0 3 = (4, 0)  )
+ /\ (matB_table 0 4 = (2, 0)  )
+ /\ (matB_table 1 0 = (1, 1)  )
+ /\ (matB_table 1 1 = (4, 1)  )
+ /\ (matB_table 1 2 = (2, 1)  )
+ /\ (matB_table 1 3 = (0, 1)  )
+ /\ (matB_table 1 4 = (3, 1)  )
+ /\ (matB_table 2 0 = (2, 2)  )
+ /\ (matB_table 2 1 = (0, 2)  )
+ /\ (matB_table 2 2 = (3, 2)  )
+ /\ (matB_table 2 3 = (1, 2)  )
+ /\ (matB_table 2 4 = (4, 2)  )
+ /\ (matB_table 3 0 = (3, 3)  )
+ /\ (matB_table 3 1 = (1, 3)  )
+ /\ (matB_table 3 2 = (4, 3)  )
+ /\ (matB_table 3 3 = (2, 3)  )
+ /\ (matB_table 3 4 = (0, 3)  )
+ /\ (matB_table 4 0 = (4, 4)  )
+ /\ (matB_table 4 1 = (2, 4)  )
+ /\ (matB_table 4 2 = (0, 4)  )
+ /\ (matB_table 4 3 = (3, 4)  )
+ /\ (matB_table 4 4 = (1, 4)  )
+ `;
 
-(* Find out which value is written into given coordinates in Matrix B *)
-val rapac_matB_def = Define `
-    rapac_matB matB_list coord =
-        case HD(FILTER (\ (c,wildcard). c=coord) matB_list) of
-             (_,value) => value
-             `
 (* Compute the three steps using a representation of Matrix B as a list of pairs
 * with coordinates and values *)
 val rapac_compute_def = Define `
     rapac_compute mat =
-        let empty_matrix = GENLIST (\wildcard.GENLIST (\wildcard.F) 5) 5
-          and matB_list = rapac_matB_list mat
+        let matB = matrix_generate (\x y .
+                     let (xt,yt) = matB_table x y in
+                                     (matrix_el mat  xt yt) #<< (rot_table  xt
+                                     yt ))
         in
-          matrix_apply (\x y wildcard .
-              (rapac_matB matB_list (x,y))
-           ?? (   ¬ (rapac_matB matB_list ((x+1) MOD 5, y))
-               &&   (rapac_matB matB_list ((x+2) MOD 5, y))))
-               empty_matrix
+          matrix_generate (\x y .
+              (matrix_el matB x y)
+           ?? (   ¬ (matrix_el matB ((x+1) MOD 5)  y)
+               &&   (matrix_el matB ((x+2) MOD 5)  y)))
                `;
 
 val iota_def = Define`
