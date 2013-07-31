@@ -82,6 +82,7 @@ val rot_table_def   = Define`
   /\(rot_table 4 2   = 39 )
   /\(rot_table 4 3   = 8  )
   /\(rot_table 4 4   = 14 )
+  /\(rot_table _ _   = 0  )
   `
 
 val rc_def = Define `
@@ -109,6 +110,7 @@ val rc_def = Define `
 /\ (rc 21  = 0x8000000000008080w:word64)
 /\ (rc 22  = 0x0000000080000001w:word64)
 /\ (rc 23  = 0x8000000080008008w:word64)
+/\ (rc _ = 0w)
     `;
 
 (* First transformation: Theta *)
@@ -163,6 +165,7 @@ val matB_table_def   = Define`
  /\ (matB_table 4 2 = (0, 4)  )
  /\ (matB_table 4 3 = (3, 4)  )
  /\ (matB_table 4 4 = (1, 4)  )
+ /\ (matB_table _ _ = (0, 0))
  `;
 
 (* Compute the three steps using a representation of Matrix B as a list of pairs
