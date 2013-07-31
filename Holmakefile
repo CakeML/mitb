@@ -4,7 +4,7 @@ ifdef POLY
 HOLHEAP = heap
 PARENT_HOLHEAP = $(CAKEMLDIR)/translator/local-hol-heap
 POLY_CLEANS = $(HOLHEAP) $(HOLHEAP).o
-BARE_THYS = $(CAKEMLDIR)/translator/ml_translatorTheory
+BARE_THYS = $(CAKEMLDIR)/translator/word_preludeTheory
 DEPS = $(patsubst %,%.uo,$(BARE_THYS))
 $(HOLHEAP) : $(DEPS)
 	$(protect $(HOLDIR)/bin/buildheap) -b $(PARENT_HOLHEAP) -o $(HOLHEAP) $(BARE_THYS)
