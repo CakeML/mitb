@@ -24,8 +24,14 @@ val matrix_apply_def = Define`
   matrix_apply f mat =
     list_apply_numbered (\ y row . list_apply_numbered (\ x el. f x y el)
     row) mat`;
+
+val safe_el_def = Define`
+  (safe_el d n [] = d) /\
+  (safe_el d 0 (x::xs) = x) /\
+  (safe_el d (SUC n) (x::xs) = safe_el d n xs)`
+
 val matrix_el_def = Define`
-  matrix_el mat x y = EL (x MOD 5) (EL (y MOD 5) mat)`;
+  matrix_el mat x y = safe_el 0w (x MOD 5) (safe_el [] (y MOD 5) mat)`;
 
 val matrix_generate_def = Define`
     matrix_generate f = GENLIST (\y.GENLIST (\x.f x y) 5) 5
