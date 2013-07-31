@@ -1,3 +1,4 @@
+# HOL
 *Script
 *Theory.sig
 *Theory.sml
@@ -6,3 +7,9 @@
 *.o
 .HOLMK
 *heap
+
+# translator
+*_ast.txt
+*_hol.txt
+*_ml.txt
+*_thm.txt
