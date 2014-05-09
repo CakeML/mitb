@@ -104,7 +104,7 @@ The changes to Robert's original design are:
 
 open HolKernel Parse boolLib bossLib
      listTheory rich_listTheory
-     arithmeticTheory Arith numLib computeLib;
+     arithmeticTheory Arith numLib computeLib wordsTheory;
 open UCcomTheory
 open lcsymtacs
 
@@ -112,7 +112,7 @@ open lcsymtacs
 (* Start new theory MITB                                              *)
 (**********************************************************************)
 
-val _ = new_theory "MITB2";
+val _ = new_theory "mitb";
 
 (* 
 Bit sizes:
@@ -122,27 +122,7 @@ Bit sizes:
  width    (b): 1600 (SHA-3 state size = r+c)
 *)
 
-(*
-Started using wordLib for bit-strings, but switched to using lists of
-Booleans because symbolic execution was simpler. Might switch back to
-wordsLib later.
-*)
 val _ = type_abbrev("bits", ``:bool list``);
-
-(*
-XOR - pads with zeros if arguments have unequal length
-(Identical to Xor in sponge.ml)
-*)
-
-(* Make XOR an infix then define it *)
-val _ = set_fixity "XOR" (Infixr 695); 
-val XOR_def =
- Define
-  `($XOR [] bl = bl)
-   /\
-   ($XOR bl [] = bl)
-   /\
-   ($XOR (b1::bl1) (b2::bl2) = (~(b1=b2)) :: $XOR bl1 bl2)`;
 
 (*
 Datatype of control states
@@ -158,15 +138,16 @@ val _ =
  Hol_datatype
   `command = Move
            | Skip
-           | Input of bits => num`;
+           | Input of 'r word => num`;
 
 (*
 Type abbreviation for MITB states
 *)
 val _ = 
+  (* ('c,'r) mitb_state is *)
  type_abbrev
   ("mitb_state", 
-   ``:control # (*b*)bits # (*b*)bits``);
+   ``:control # ('r+'c) word # ('r+'c) word ``);
 (*              permanent   volatile      *)
 
 (*
@@ -175,7 +156,7 @@ Type abbreviation for MITB inputs
 val _ =
  type_abbrev
   ("mitb_inp",
-   ``:bool # bool # bits # num``);
+   ``:bool # bool # 'r word # num``);
 (*    skip   move  block  size     *)
 (*
 Type abbreviation for MITB outputs
@@ -183,46 +164,53 @@ Type abbreviation for MITB outputs
 val _ =
  type_abbrev
   ("mitb_out",
-   ``:bool # bits``);
+   ``:bool # 'n word``);
 
 
-(*
-Type abbreviation for MITB ports (inputs and outputs)
-*)
-val _ =
- type_abbrev
-  ("mitb_port",
-   ``:bits # bits # bits # num # bits # bits``);
-(*    skip   move  block  size  reasy  digest    *)
 (*
 Extract components of an MITB state
 *)
 val cntlOf_def =
  Define
-  `cntlOf((cntl,pmem,vmem):mitb_state) = cntl`;
+  `cntlOf((cntl,pmem,vmem): ('r, 'c) mitb_state) = cntl`;
 
 val pmemOf_def =
  Define
-  `pmemOf((cntl,pmem,vmem):mitb_state) = pmem`;
+  `pmemOf((cntl,pmem,vmem): ('r, 'c) mitb_state) = pmem`;
 
 val vmemOf_def =
  Define
-  `vmemOf((cntl,pmem,vmem):mitb_state) = vmem`;
+  `vmemOf((cntl,pmem,vmem): ('r, 'c) mitb_state) = vmem`;
 
 (*
 Type abbreviation for MITB device
 *)
 val _ = 
  type_abbrev
+ (* ('c,'r) mitb is *)
   ("mitb", 
-   ``:(num # num # num)           (* bitrate/capacity/digest *)
-      -> ((*b*)bits -> (*b*)bits) (* permutation             *)
-      -> mitb_state -> command -> mitb_state``);
+   ``: ( ('r+'c) word -> ('r+'c) word) (* permutation *)
+       -> (('c,'r) mitb_state) -> ('r command) -> (('c,'r) mitb_state) 
+      ``);
+
+val _ = 
+ type_abbrev
+ (* ('c, 'n,'r) mitbstepfunction is *)
+  ("mitbstepfunction", 
+  ``: 
+  ( ('r+'c) word -> ('r+'c) word)  (* permutation *)
+  -> ('c, 'r) mitb_state # 'r mitb_inp 
+ -> ('c, 'r) mitb_state # 'n mitb_out
+      ``);
 
 (*
-List of zeros (represented as Fs) of a given size
-(Identical to Zeros in sponge.ml)
+Alternative name for the zero word.
 *)
+val ZERO_def =
+ Define
+  `ZERO = (0w: 'a word) `;
+
+(* ZERO function used on bits *)
 val ZEROS_def =
  Define
   `(ZEROS 0 = [])
@@ -231,87 +219,97 @@ val ZEROS_def =
 
 (*
 Defines one step of MITB (r,c,n) with permutation function f
-MITB_FUN (r,c,n) f : mitb_state -> inputs -> mitb_state
+MITB_FUN  f : 'b mitb_state -> 'r inputs -> 'b mitb_state
 *)
-
 val MITB_FUN_def =
  Define
   `(* Skip : {Ready -> Ready} + {Absorbing -> Absorbing} *)
-   (MITB_FUN (r,c,n) f (cntl,pmem,vmem) Skip
+   (
+   (MITB_FUN: ('c,'r) mitb)
+     f ((cntl,pmem,vmem)) Skip
     = (cntl,pmem,vmem))
    /\
    (* Input : Ready -> Ready *)
-   (MITB_FUN (r,c,n) f (Ready,pmem,vmem) (Input key len)
-    = (Ready,f(key++(ZEROS c)),ZEROS(r+c)))
+   (MITB_FUN f (Ready,pmem,vmem) (Input key len)
+    = (Ready, key @@ (ZERO:'c word),ZERO))
    /\
    (* Move: {Ready -> Absorbing} *)
-   (MITB_FUN (r,c,n) f (Ready,pmem,vmem) Move
+   (MITB_FUN f (Ready,pmem,vmem) Move
     = (Absorbing,pmem,pmem))
    /\
    (* Move: {Absorbing -> Ready} *)
-   (MITB_FUN (r,c,n) f (Absorbing,pmem,vmem) Move
-    = (Ready,pmem,ZEROS(r+c)))
+   (MITB_FUN f (Absorbing,pmem,vmem) Move
+    = (Ready,pmem,ZERO))
    /\
    (* Input: Absorbing -> {Absorbing,AbsorbEnd,Ready} *)
-   (MITB_FUN (r,c,n) f (Absorbing,pmem,vmem) (Input blk len)
-    = if len <= r-2 then (* More than one bit too small *)
+   (MITB_FUN f (Absorbing,pmem,vmem) (Input blk len)
+    = 
+    let r=dimindex(:'r) in
+      if len <= r-2 then (* More than one bit too small *)
        (Ready,
         pmem,
-        f(vmem 
-          XOR 
-          (TAKE len blk ++ [T] ++ ZEROS(r-len-2) ++ [T] ++ ZEROS c))) else
-      if len = r-1 then  (* Exactly one-bit too small *)
+          f (
+          (* wordlib seems to think:
+          *  0 is the lsb
+          *  concatination makes left-hand operator more significant
+          *  .. check with Sponge implementation..
+          * *)
+          (* have to review after sponge construction is implemented using
+          * word lib. 
+          *
+          * We compute:
+        (*   (vmem XOR 
+        *   (TAKE len blk ++ [T] ++ ZEROS(r-len-2) ++ [T] ++ ZEROS c)) *)
+        by
+        1. rightshifting r-len times (removing the r-len least
+        siginificant bits)
+        2. leftshifting back again (might remove this step based on how we are
+        expected to read input
+        3. || with 1^*10^*1 padding, that is 
+            (0x1w:'r word) << ((r-len)-1) + 01w
+        4.  append c zeroes
+        Take care, might need to catch case where len=0 if this code changes.
+        *)
+          vmem ??
+           (
+            ( 
+             (
+              ((blk >>> (r-len))<<(r-len)) (*1 and 2*)
+              ||
+              ((0x1w) << ((r-len)-1) + 01w) (*3*)
+             )
+            @@ (ZERO:'c word) (*4*)
+           )
+          )   
+          ))
+      else
+       if len = r-1 then  (* Exactly one-bit too small *) 
        (AbsorbEnd,
         pmem,
-        f(vmem XOR (TAKE len blk ++ [T] ++ ZEROS c))) else  (* Full block *)
-      (Absorbing,pmem,f(vmem XOR (blk ++ ZEROS c))))
+        (* see above *)
+        f(vmem ??
+          (((blk >>> (1))<<(1)) (*1 and 2*)
+          || 
+          (0x1w))
+          @@ (ZERO:'c word) (*4*)
+        ))
+        (* f(vmem XOR (TAKE len blk ++ [T] ++ ZEROS c)))  *)
+       else  (* Full block *)
+      (Absorbing,pmem,f(vmem ?? (blk @@ (ZERO: 'c word)))) 
+      )
    /\
    (* Move: AbsorbEnd -> Ready} *)
-   (MITB_FUN (r,c,n) f (AbsorbEnd,pmem,vmem) Move
-    = (Ready, pmem, ZEROS(r+c)))
+   (MITB_FUN f (AbsorbEnd,pmem,vmem) Move
+    = (Ready, pmem, ZERO))
    /\
    (* Input: AbsorbEnd -> Ready} *)
-   (MITB_FUN (r,c,n) f (AbsorbEnd,pmem,vmem) (Input blk len)
-    = (Ready, pmem, f(vmem XOR (ZEROS(r-1) ++ [T] ++ ZEROS c))))
+   (MITB_FUN  f (AbsorbEnd,pmem,vmem) (Input blk len)
+    = (Ready, pmem,
+    (* see above
+     * f(vmem XOR (ZEROS(r-1) ++ [T] ++ ZEROS c)))) *)
+     f(vmem ?? ( (0x1w: 'r word) @@ (ZERO: 'c word) ))
+     ))
     `;
-
-(*
-Execute one step of MITB_FUN, except in the case when len = r-r then take
-two steps so as to move through AbsorbEnd to apply the permutation f
-twice.
-
-StepMITB (r,c,n) : (bits -> bits) -> mitb_state -> command -> mitb_state
-                   permutation      initial state       
-*)
-val StepMITB_def =
- Define
-  `StepMITB (r,c,n) f s i =
-    if (cntlOf s = AbsorbEnd) 
-     then MITB_FUN (r,c,n) f (MITB_FUN (r,c,n) f s i) i
-     else MITB_FUN (r,c,n) f s i`;
-
-(*
-Run MITB
-
-RunMITB (r,c,n) : (bits -> bits) -> mitb_state -> command list -> mitb_state
-                  permutation     initial state     commands     final state
-*)
-val RunMITB_def =
- Define
-  `(RunMITB (r,c,n) f s [] =  s)
-   /\
-   (RunMITB (r,c,n) f s (i :: il) =
-     RunMITB (r,c,n) f (StepMITB (r,c,n) f s i) il)`;
-
-(*
-Run SHA-3 instantiation of MITB:
-
-SHA3 : (bits -> bits) -> mitb_state -> command list -> mitb_state
-       permutation     initial state     commands      final state
-*)
-val SHA3_def =
- Define
-  `SHA3 = RunMITB(1152,448,224)`;
 
 (*
 Split a message into blocks of a given length
@@ -325,44 +323,6 @@ val SplitMessage_def =
      else TAKE r msg :: SplitMessage r (DROP r msg)`
   (WF_REL_TAC `measure (LENGTH o SND)`
     THEN RW_TAC list_ss [LENGTH_DROP]);
-(*
-Extract digest from a state
-*)
-val Digest_def =
- Define
-  `(Digest n (Ready,pmem,vmem) = TAKE n vmem)
-   /\
-   (Digest n (Absorbing,pmem,vmem) = ZEROS n)
-   /\
-   (Digest n (AbsorbEnd,pmem,vmem) = ZEROS n)`;
-
-(*
-MITBHash a message by running MITB on a key on length n (224)
-*)
-val MITB_MAC_def =
- Define
-  `MITB_MAC (r,c,n) f key msg =
-    let (cntl,pmem,vmem) =
-     RunMITB (r,c,n) f (Ready, ZEROS(r+c), ZEROS(r+c)) 
-      ([Input key r;Move]
-         ++ MAP (\blk. Input blk (LENGTH blk)) (SplitMessage r msg))
-    in
-     if cntl = Ready then (TAKE n vmem) else ZEROS n`;
-
-(* 
-
-A signal - type abbreviations sig, nsig for signals defined below -
-represent sequences of bits (sig) of numbers (nsig).
-
-If s : sig then s(t) is the value of the signal s at time t
-(t=0 is the startup time). For more details of this modelling style
-see: http://www.cl.cam.ac.uk/~mjcg/WhyHOL.pdf.
-*)
-
-(*
-val _ = type_abbrev("sig",  ``: num -> bool list``);
-val _ = type_abbrev("nsig", ``: num -> num``);
-*)
 
 (*
 Predicate to test for well-formed Keccak parameters
@@ -371,468 +331,33 @@ val GoodParameters_def =
  Define
   `GoodParameters (r,c,n)
     = 2 < r /\ 0 < c /\ n <= r`;
-
 (*
-Width sig n species sig is n-bits wide
+Predicate to test for well-formed Keccak parameters
 *)
-val Width_def =
+val GoodParameters_def =
  Define
-  `Width sig n = !t. LENGTH(sig t) = n`;
-
-(*
-
-MITB_IMP key (r,c,n) f is a (still somewhat abstract) model of an
-MITB device initialised with key; it has type:
-
-  ((num->control)#sig#sig) -> sig#sig#sig#nsig#sig#sig -> bool
- . |--control---|  |   |  .  . |   |    |   | . |   |   .
- .               pmem  |  .  .skip |    |   | .ready|   .
- .                   vmem .  .   idle   |   | .  digest .
- .                        .  .       block  | .         .
- .                        .  .            size.         .
- .                        .  .                .         .
- .                        .  .                .         .
- |---------states---------|  |-----inputs-----|-outputs-|
-
-White box view:
-
- - ready_out shows control state
-
- - digest_out is bottom n bits of volatile memory (vmem)
-
-                         |------------------------------------|
-                         |           |----------------------| |
-                         |           |           |--------| | |
-                         |           |           |        | | |
-                        \|/         \|/         \|/       | | |
-                   |-----------|-----------|-----------|  | | |
-                   |   cntl    |  pmem     |  vmem     |  | | |
-                   |   (reg)   |  (reg)    |  (reg)    |  | | |
-                   |-----------|-----------|-----------|  | | |
-                         |           |           |        | | |
-                 control /       r+c /       r+c /        | | |
-                         |           |           |        | | |
-                cntl_sig |  pmem_sig |  vmem_sig |        | | |
-                         |           |           |        | | |
-                        \|/         \|/         \|/       | | |
-                   |-----------------------------------|  | | |
-              1    |                                   |  | | | 1
-   skip_inp ---/-->|                                   |--|-|-|--/--> ready_out
-                   |                                   |  | | |
-              1    |                                   |  | | |
-   move_inp ---/-->|                                   |  | | |
-                   | MITB_CONTROL_LOGIC key (r,c,n) f  |  | | |
-              r    |    (combinational logic)          |  | | |
-   block_inp --/-->|                                   |  | | |
-                   |                                   |  | | |
-            num    |                                   |  | | | n
-   size_inp ---/-->|                                   |--|-|-|--/--> digest_out
-                   |                                   |  | | |
-                   |-----------------------------------|  | | |
-                         |           |           |        | | |
-                 control /       r+c /       r+c /        | | |
-                         |           |           |        | | |
-                cntl_nxt |  pmem_nxt |  vmem_nxt |        | | |
-                         |           |           |        | | |
-                         |           |           |--------| | |
-                         |           |----------------------| |
-                         |------------------------------------|
-
-
-The main interaction protocols (transactions) are:
-
- Set key:  if ready_out then hold skip_inp and move_inp F for 
- (time t)  one cycle and f(block_inp t ++ ZEROS c) will be stored 
-           in pmem. Keeping skip_inp T in subsequent cycles
-           freezes the state.
-
- Hash msg: if ready_out then hold skip_inp F and move_inp T 
- (time t)  for one cycle, then hold both skip_inp and move_inp F 
-           until ready_out goes to T again. The message is absorbed 
-           starting at t+1, data inputs (message block and size) is
-           read on successive cycles until the last block is read 
-           (indicated by its length being less than r). Keeping 
-           skip_inp T in subsequent cycles freezes the state so 
-           the digest can be read.
-
-The two control inputs work as follows:
-
- skip_inp: holding T prevents the state from changing;
-
- move_imp: driving T always causes a transition 
-           from Ready to Absorbing:
-            - in Ready it starts a hash transaction
-            - in Absorbing it resets vmem and returns to Ready
-
-The data inputs block_inp and size_inp are only read if skip_in is F
-and move_inp is T. When this is the case:
-
- - if Ready at time t, then f((block_in t)++(ZEROS c)) is written into
-   pmem, ZEROS (r + c) written into vmem, the input size_inp is
-   ignored and the state stays in Ready;
-
- - if in Absorbing, then both block_inp and size_inp are read and what
-   happens depends on whether the block size is r, one less than r or
-   two or more less than r (the next state could be Absorbing or Ready
-   - details in MITB_FUN_def).
-        
-*)
-
-(*
-Unit-delay model sequential of a register that powers up holding
-init_state.
-*)
-
-val REGISTER_def =
- Define
-  `REGISTER init_state (inp,out) =
-   (out 0 = init_state) /\ !t. out(t+1) = inp t`;
-
+  `GoodParameters (r,c,n)
+    = 2 < r /\ 0 < c /\ n <= r`;
 (*
 Functional version as in the paper
 *)
 val MITB_def =
  Define
-  `MITB (r,c,n:num) f ((skip,move,block,size), (cntl,pmem,vmem)) =
-    MITB_FUN (r,c,n) f 
+  `MITB  f ((skip,move,block,size), (cntl,pmem,vmem)) =
+    MITB_FUN  f 
      (cntl, pmem, vmem) 
-     (if skip = [T]
+     (if skip = T
        then Skip else
-      if move = [T]
+      if move = T
        then Move
-       else Input block size)`;
-
-(*
-Control logic - currently combinational but may need to be retimed to
-be sequential.
-*)
-val MITB_CONTROL_LOGIC_def =
- Define
-  `MITB_CONTROL_LOGIC
-    (r,c,n) f 
-    (cntl_sig,pmem_sig,vmem_sig,skip_inp,move_inp,block_inp,size_inp,
-     cntl_nxt,pmem_nxt,vmem_nxt,ready_out,digest_out) =
-    (!t.
-      (cntl_nxt t, pmem_nxt t, vmem_nxt t) =
-       MITB (r,c,n) f 
-        ((skip_inp t,move_inp t,block_inp t,size_inp t), 
-         (cntl_sig t,pmem_sig t,vmem_sig t)))
-    /\
-    (!t. ready_out t = [cntl_sig t = Ready])
-    /\
-    (!t. digest_out t = 
-          if cntl_sig t = Ready then TAKE n (vmem_sig t) else ZEROS n)`;
-
-(*
-Some temporary experiments (to be deleted)
-
-  (SIMP_RULE std_ss 
-   [REGISTER_def,Width_def,GoodParameters_def,MITB_CONTROL_LOGIC_def,
-   FORALL_PROD]
-   MITB_IMP_def)
-
-Q.SPECL
- [`cntl_of o sigma`,`pmem_of o sigma`,`vmem_of o sigma`,
-  `skip_of o sigma`,`move_of o sigma`,`block_of o sigma`,
-  `size_of o sigma`,`ready_of o sigma`,`digest_of n o sigma`]
-
-SIMP_RULE std_ss [ZipSigs_def,PULL_EXISTS]
- (Q.SPEC `psi o ZipSigs`
-  (SIMP_RULE std_ss 
-   [REGISTER_def,Width_def,GoodParameters_def,MITB_CONTROL_LOGIC_def,
-   MITB_IMP_def,FORALL_PROD]
-   (Q.ISPEC `MITB_IMP key (r,c,n) f` Models_def)));
-
-val it =
-|- MITB_IMP key (r,c,n) f |= psi o ZipSigs <=>
-   !control_sig pmem_sig vmem_sig skip_inp move_inp block_inp size_inp 
-    ready_out digest_out cntl_nxt
-      pmem_nxt vmem_nxt.
-     (2 < r /\ 0 < c /\ n <= r) /\ 
-     (!s. LENGTH (f s) = LENGTH s) /\
-     (LENGTH key = r) /\ 
-     (!t. LENGTH (pmem_sig t) = r + c) /\
-     (!t. LENGTH (vmem_sig t) = r + c) /\
-     (!t. LENGTH (pmem_nxt t) = r + c) /\
-     (!t. LENGTH (vmem_nxt t) = r + c) /\ 
-     (!t. LENGTH (skip_inp t) = 1) /\
-     (!t. LENGTH (move_inp t) = 1) /\ 
-     (!t. LENGTH (block_inp t) = r) /\
-     (!t. size_inp t <= r) /\ 
-     (!t. LENGTH (ready_out t) = 1) /\
-     (!t. LENGTH (digest_out t) = n) /\
-     (control_sig 0 = Ready) /\ 
-     (!t. control_sig (t + 1) = cntl_nxt t) /\
-     (pmem_sig 0 = f (key ++ ZEROS c)) /\ 
-     (!t. pmem_sig (t + 1) = pmem_nxt t) /\
-     (vmem_sig 0 = ZEROS (r + c)) /\ 
-     (!t. vmem_sig (t + 1) = vmem_nxt t) /\
-     (!t.
-        (cntl_nxt t,pmem_nxt t,vmem_nxt t) =
-         MITB (r,c,n) f
-          ((skip_inp t,move_inp t,block_inp t,size_inp t),control_sig t,pmem_sig t,vmem_sig t)) /\ 
-     (!t. ready_out t = [control_sig t = Ready]) /\
-     (!t. digest_out t = if control_sig t = Ready then TAKE n (vmem_sig t) else ZEROS n) 
-     ==>
-     psi(\t. ((skip_inp t,move_inp t,block_inp t,size_inp t),control_sig t,pmem_sig t,vmem_sig t))
-
-     MITB_IMP key (r,c,n) f |= phi <=>
-     !cntl_sig pmem_sig vmem_sig 
-      skip_inp move_inp block_inp size_inp ready_out digest_out.
-       (?cntl_nxt pmem_nxt vmem_nxt.
-          (2 < r /\ 0 < c /\ n <= r) /\ (!s. LENGTH (f s) = LENGTH s) /\
-          (LENGTH key = r) /\ (!t. LENGTH (pmem_sig t) = r + c) /\
-          (!t. LENGTH (vmem_sig t) = r + c) /\
-          (!t. LENGTH (pmem_nxt t) = r + c) /\
-          (!t. LENGTH (vmem_nxt t) = r + c) /\
-          (!t. LENGTH (skip_inp t) = 1) /\ (!t. LENGTH (move_inp t) = 1) /\
-          (!t. LENGTH (block_inp t) = r) /\ (!t. size_inp t <= r) /\
-          (!t. LENGTH (ready_out t) = 1) /\ (!t. LENGTH (digest_out t) = n) /\
-          ((cntl_sig 0 = Ready) /\ !t. cntl_sig (t + 1) = cntl_nxt t) /\
-          ((pmem_sig 0 = f (key ++ ZEROS c)) /\
-           !t. pmem_sig(t + 1) = pmem_nxt t) /\
-          ((vmem_sig 0 = ZEROS (r + c)) /\ !t. vmem_sig (t + 1) = vmem_nxt t) /\
-          (!t.
-             (cntl_nxt t,pmem_nxt t,vmem_nxt t) =
-             MITB (r,c,n) f
-               ((skip_inp t,move_inp t,block_inp t,size_inp t),cntl_sig t,pmem_sig t,
-                vmem_sig t)) /\ (!t. ready_out t = [cntl_sig t = Ready]) /\
-          (!t.
-             digest_out t =
-             if cntl_sig t = Ready then TAKE n (vmem_sig t) else ZEROS n))
-       ==>
-       phi ((cntl_sig,pmem_sig,vmem_sig),
-            (skip_inp,move_inp,block_inp,size_inp,ready_out,digest_out))
-
-
-
-*)
-
-(*
-Schematic capture in HOL using the classical ?-/\ style
-(predicates representing modules are joined using conjunction and
-internal wires hidded using existential quantification - see:
-http://www.cl.cam.ac.uk/~mjcg/WhyHOL.pdf)
-*)
-val MITB_IMP_def =
- Define
-  `MITB_IMP key (r,c,n) f (cntl_sig,pmem_sig,vmem_sig)
-    (skip_inp,move_inp,block_inp,size_inp,ready_out,digest_out) =
-    ?cntl_nxt pmem_nxt vmem_nxt.
-    (* ======== bus width specifications ======== *)
-      GoodParameters(r,c,n)
-      /\ 
-      (!s. LENGTH(f s) = LENGTH s)
-      /\
-      (LENGTH key = r)
-      /\
-      Width pmem_sig (r+c)
-      /\
-      Width vmem_sig (r+c)
-      /\
-      Width pmem_nxt (r+c)
-      /\
-      Width vmem_nxt (r+c)
-      /\
-      Width skip_inp 1 
-      /\ 
-      Width move_inp 1 
-      /\ 
-      Width block_inp r 
-      /\
-      (!t. size_inp t <= r)
-      /\ 
-      Width ready_out 1
-      /\ 
-      Width digest_out n
-      /\
-    (* ==== netlist connection specification ==== *)
-      REGISTER Ready (cntl_nxt,cntl_sig)
-      /\
-      REGISTER (f(key ++ ZEROS c)) (pmem_nxt,pmem_sig)
-      /\
-      REGISTER (ZEROS(r + c)) (vmem_nxt,vmem_sig)
-      /\
-      MITB_CONTROL_LOGIC
-       (r,c,n) f
-       (cntl_sig,pmem_sig,vmem_sig,skip_inp,move_inp,block_inp,size_inp,
-        cntl_nxt,pmem_nxt,vmem_nxt,ready_out,digest_out)`;
-
-(*
-MITB_DEV is a black box version of MITB_IMP - i.e. the states are hidden
-and only the inputs and outputs are visible.
-*)
-val MITB_DEV_def =
- Define
-  `MITB_DEV key (r,c,n) f 
-    (skip_inp,move_inp,block_inp,size_inp,ready_out,digest_out) =
-   ?cntl_sig pmem_sig vmem_sig.
-    MITB_IMP key (r,c,n) f (cntl_sig,pmem_sig,vmem_sig)
-     (skip_inp,move_inp,block_inp,size_inp,ready_out,digest_out)`;
-
-val MITB_DEV_def =
- Define
-  `MITB_DEV key (r,c,n) f 
-    (skip_inp,move_inp,block_inp,size_inp,ready_out,digest_out) =
-   ?cntl_sig pmem_sig vmem_sig.
-    MITB_IMP key (r,c,n) f (cntl_sig,pmem_sig,vmem_sig)
-     (skip_inp,move_inp,block_inp,size_inp,ready_out,digest_out)`;
-
-val _ =
- Hol_datatype
-  `mac_query =
-            SetKey of bits
-          | Mac of bits
-          | Corrupt
-          `;
-
-val _ =
- Hol_datatype
-  `mac_to_adv_msg =
-            WasCorrupted 
-          | OracleResponse of bits
-          `;
-
-val _ =
- Hol_datatype
-  `adv_to_mac_msg =
-            CorruptACK 
-          | OracleQuery of bits
-          `;
-
-(* State transition function for the functionality defining a perfect MAC
-* device for a given Hash function
-* Parameters: H (r,c,n) -- Hash function and parameters (we use only n)
-* Internal state: current key K, corruption status
-* Inputs are queries of type query
-* Output are bitstrings
-*)
-val FMAC_def =
-    Define
-          `
-          ( FMAC (r,c,n) (H:bits -> bits) (K,F) (EnvtoP (SetKey k)) =
-          (
-            if (LENGTH k = r) then
-              ((k,F),(Proto_toEnv []))
-            else
-              ((K,F),(Proto_toEnv []))
-              ))
-          /\
-          ( FMAC (r,c,n) H (K,F) (EnvtoP (Mac m)) = 
-            ((K,F),(Proto_toEnv (H (K ++ m)))))
-          /\
-          ( FMAC (r,c,n) H (K,F) (EnvtoP (Corrupt)) = ((K,T),Proto_toA (WasCorrupted)))
-          /\
-          ( FMAC (r,c,n) H (K,T) (AtoP (CorruptACK)) = ((K,T),Proto_toEnv []))
-          /\
-              (* Adversarial interface may request Hashes with K prepended to
-              * the input. This interface will be accessed by SIM, to be able to
-              * emulate a MITB *)
-          ( FMAC (r,c,n) H (K,T) (AtoP (OracleQuery m)) =
-          ((K,T),(Proto_toA (OracleResponse (H K++m)))))
-          /\
-          (* When corrupted, ignore honest queries *)
-          ( FMAC (r,c,n) H (K,T) (EnvtoP q) = ((K,T),Proto_toEnv []))
-          `;
-
-(* Sanity test *)
-val th =
-EVAL ``EXEC_LIST (FMAC (r,c,n) (\m.m)) DUMMY_ADV (((ZEROS r),F),[]) 
-[Env_toP (Mac m)]``;
-
-(* Function defining the protocol that implements FMAC using a MITB. In real
- * life, this protocol corresponds to a client library that computes hashes by
- * splitting the message and feeding it into the MITB. This is how honest users
- * are supposed to use the MITB 
- *
- * Parametric in: 
- * mitbf - step function of MITB,
- * (r,c,n) - global parameters for Sponge-construction (only r is used)
- * Inputs: 
- * s - current MITB state
- * T/F - corruption status
- * query
- * Output: bitstring
- * *)
-
-val PROTO_def =
-    Define
-          `
-          ( PROTO (mitbf : mitb_state # mitb_inp -> mitb_state # mitb_out) (r,c,n) (s,F) (EnvtoP (SetKey k)) =
-            if (LENGTH k = r) then
-              (
-              let (s1,(rdy1,dig1))=mitbf (s,(T,F,(ZEROS r),0)) in
-                if rdy1=F then
-                  (let (s2,(rdy2,dig2)) =mitbf(s1,(F,T,(ZEROS r),0)) in
-                    let (s3,(rdy3,dig3))= mitbf (s2,(F,F,k,(r:num))) in
-                      ((s3,F),(Proto_toEnv [])))
-                else
-                    let (s2,rdy2,dig2)=mitbf(s1,(F,F,k,r)) in
-                     ((s2,F),(Proto_toEnv []))
-              )
-            else
-              ((s,F),(Proto_toEnv []))
-              )
-          /\
-          ( PROTO mitbf (r,c,n) (s,F) (EnvtoP (Mac m)) =
-          (* Bring MITB into Ready state *)
-          (
-           let (s0,rdy0,dig0) = mitbf (s,(T,F,(ZEROS r),0)) in
-           (* make sure that MITB is in Ready state *)
-             let (sr,rdyr,digr) =
-              ( if (rdy0=F) then
-                  (mitbf (s0,(F,T,(ZEROS r),0)))
-                else
-                  (s0,rdy0,dig0)
-              ) in
-                (* Split the message in pieces of length r or less
-                * apply mitb(s,F,F,m_i,|m_i|) to every state s and block m_i
-                * and use the resulting state for computation with the next
-                * block
-                *)
-                let sf = 
-                 FOLDR (\blk. \state. 
-                  let (si,rdyi,dgi) = mitbf (state,(F,F,blk, (LENGTH blk))) in
-                    if (LENGTH blk) = r-1 then
-                      (* special case: we need to add an empty block for padding *)
-                      let (sl,rdyl,dgl) = mitbf (si,(F,F,(ZEROS r), 0)) in
-                        sl
-                    else si
-                  ) sr (SplitMessage r m) in
-                (* let sf = AUX_FEED_MITB mitbf (r,c,n) sr m in  *)
-                  (* learn digest by skipping *)
-                  let (s1,rdy1,digest) = mitbf (sf,(T,F, (ZEROS r),0)) in 
-                  (* two consecutive moves to re-initialise vmem *)
-                  let (s2,rdy2,dig2) = mitbf (s1,(F,T, (ZEROS r),0)) in 
-                  let (s3,rdy3,dig3) = mitbf (s2,(F,T, (ZEROS r),0)) in
-                    ((s3,F),(Proto_toEnv digest))
-          ))
-          /\
-          ( PROTO mitbf (r,c,n) (s,F) (EnvtoP (Corrupt)) =
-                ((s,T),(Proto_toEnv [])))
-          /\
-          (* Give adversary blackbox access when corrupted *)
-          ( PROTO mitbf (r,c,n) (s,T) (AtoP i) =
-            let (s_next,rdy:bool,dig: bits) = mitbf (s,i) in
-                ((s_next,T), (Proto_toA (rdy::dig))))
-          /\
-          (* Ignore honest queries when corrupted *)
-          ( PROTO mitbf (r,c,n) (s,T) (EnvtoP _) = ((s,T),(Proto_toEnv [])))
-          /\
-          (* Ignore adversarial queries when not corrupted *)
-          ( PROTO mitbf (r,c,n) (s,F) (AtoP _) = ((s,F),(Proto_toA [])) )
-          /\
-          (* Ignore the rest TODO : get rid of this and replace with individual
-          * cases.. *)
-          ( PROTO mitbf (r,c,n) (s,cor) _ = ((s,cor),(Proto_toEnv [])))
-                `;
+       else 
+         if (size <=dimindex(:'r)) then 
+          Input (block: 'r word) size
+         else Skip)`;
 
 (* We define a step function that behaves like MITB, but includes the output,
 * too.
-* It also checks the input for validity, i.e., block cannot be
-* longer than r and size larger than r.
 * Parametric in:
-*  (r,c,n) - global parameters
 *  f - compression function used inside MITB
 *  Input:
 *  (cnt,pmem,vmem) - current state of the MITB
@@ -843,22 +368,174 @@ val PROTO_def =
 *)
 val MITB_STEP_def =
  Define
-  `MITB_STEP (r,c,n:num) f ((cntl,pmem,vmem), (skip,move,block,size)) =
-  if ((LENGTH block <= r) /\ size <=r) then 
-    (let (cntl_n,pmem_n,vmem_n) = MITB (r,c,n) f (([skip],[move],block,size), (cntl, pmem, vmem))
+  `MITB_STEP f ((cntl,pmem,vmem), (skip,move,block,size)) =
+    let (cntl_n,pmem_n,vmem_n) = MITB  f ((skip,move,block,size), (cntl, pmem, vmem))
     in
       ((cntl_n,pmem_n,vmem_n),
       (
       (cntl_n = Ready),
-      (if cntl_n = Ready then (TAKE n vmem) else ZEROS n))
-      ))
-  else (* ignore input otherwise *)
-      ((cntl,pmem,vmem),
-      (
-      (cntl = Ready),
-      (if cntl = Ready then (TAKE n vmem) else ZEROS n))
+      (if cntl_n = Ready then ((dimindex(:'n)-1 >< 0) vmem) else (ZERO:'n word )))
       )
     `;
+
+
+val _ =
+ Hol_datatype
+  `mac_query =
+            SetKey of 'r word
+          | Mac of bits
+          | Corrupt
+          `;
+
+val _ =
+ Hol_datatype
+  `mac_to_adv_msg =
+            WasCorrupted 
+          | OracleResponse of 'n word
+          `;
+
+val _ =
+ Hol_datatype
+  `adv_to_mac_msg =
+            CorruptACK 
+          | OracleQuery of bits
+          `;
+
+val WORD_TO_BITS_def=
+  Define
+  ` WORD_TO_BITS (w:'l word) =
+  let 
+    bitstring_without_zeros =  MAP (\e.if e=1 then T else F) (word_to_bin_list w)
+  in
+    ( ZEROS (dimindex(:'l) - (LENGTH bitstring_without_zeros) )) ++
+    bitstring_without_zeros`;
+
+val BITS_TO_WORD_def=
+  Define
+  ` BITS_TO_WORD = 
+      word_from_bin_list o ( MAP (\e.if e=T then 1 else 0))`;
+
+(* State transition function for the functionality defining a perfect MAC
+* device for a given Hash function
+* Parameters: H  -- Hash function
+* Internal state: current key K, corruption status
+* Inputs are queries of type query
+* Output are bitstrings
+*)
+val FMAC_def =
+    Define
+          `
+          ( FMAC (H: bits -> 'n word) (K,F) 
+              (EnvtoP (SetKey k:'r mac_query)) =
+              ((k,F),(Proto_toEnv 0w))
+          )   
+          /\
+          ( FMAC H (K,F) (EnvtoP (Mac m)) = 
+            ((K,F),(Proto_toEnv (H (WORD_TO_BITS(K) ++ m)))))
+          /\
+          ( FMAC H (K,F) (EnvtoP (Corrupt)) = ((K,T),Proto_toA (WasCorrupted)))
+          /\
+          ( FMAC H (K,T) (AtoP (CorruptACK)) = ((K,T),Proto_toEnv 0w))
+          /\
+              (* Adversarial interface may request Hashes with K prepended to
+              * the input. This interface will be accessed by SIM, to be able to
+              * emulate a MITB *)
+          ( FMAC H (K,T) (AtoP (OracleQuery m)) =
+          ((K,T),(Proto_toA (OracleResponse (H((WORD_TO_BITS K)++m))))))
+          /\
+          (* When corrupted, ignore honest queries *)
+          ( FMAC H (K,T) (EnvtoP q) = ((K,T),Proto_toEnv 0w))
+          `;
+
+(* Sanity test *)
+(* val th = *)
+(* EVAL ``EXEC_LIST (FMAC  (\m.m)) DUMMY_ADV (((ZERO: word32),F),[]) *) 
+(* [Env_toP (Mac m)]``; *)
+
+(* Function defining the protocol that implements FMAC using a MITB. In real
+ * life, this protocol corresponds to a client library that computes hashes by
+ * splitting the message and feeding it into the MITB. This is how honest users
+ * are supposed to use the MITB 
+ *
+ * Parametric in: 
+ * mitbf - step function of MITB,
+ * - global parameters for Sponge-construction (only r is used)
+ * Inputs: 
+ * s - current MITB state
+ * T/F - corruption status
+ * query
+ * Output: bitstring
+ * *)
+val PROTO_def =
+    Define
+          `
+          ( PROTO (mitbf : ('c,'r) mitb_state # 'r mitb_inp -> ('c,'r)
+          mitb_state # 'n mitb_out) (s,F) (EnvtoP (SetKey k)) =
+              let (s1,(rdy1,dig1))=mitbf (s,(T,F,(ZERO: 'r word),0)) in
+                if rdy1=F then
+                  (let (s2,(rdy2,dig2)) =mitbf(s1,(F,T,(ZERO:'r word),0)) in
+                    let (s3,(rdy3,dig3))= 
+                    mitbf (s2,(F,F,k,(dimindex (:'r)))) in
+                      ((s3,F),(Proto_toEnv 0w)))
+                else
+                    let (s2,rdy2,dig2)=mitbf(s1,(F,F,k,(dimindex (:'r)))) in
+                     ((s2,F),(Proto_toEnv 0w))
+              )
+          /\
+          ( PROTO mitbf (s,F) (EnvtoP (Mac m)) =
+          (* Bring MITB into Ready state *)
+           let (s0,rdy0,dig0) = mitbf (s,(T,F,(ZERO: 'r word),0)) in
+           (* make sure that MITB is in Ready state *)
+             let (sr,rdyr,digr) =
+              ( if (rdy0=F) then
+                  (mitbf (s0,(F,T,(ZERO: 'r word),0)))
+                else
+                  (s0,rdy0,dig0)
+              ) in
+                (* Split the message in pieces of length r or less
+                * apply mitb(s,F,F,m_i,|m_i|) to every state s and block m_i
+                * and use the resulting state for computation with the next
+                * block
+                *)
+                let sf = 
+                 FOLDR (\blk. \state. 
+                  let (si,rdyi,dgi) = mitbf
+                  (* TODO check if BITS to word preserves the endianness for the
+                  * last block *)
+                  (state,(F,F,BITS_TO_WORD(blk), (LENGTH blk))) in
+                    if (LENGTH blk) = dimindex(:'r)-1 then
+                      (* special case: we need to add an empty block for padding *)
+                      let (sl,rdyl,dgl) = mitbf (si,(F,F,(ZERO: 'r word), 0)) in
+                        sl
+                    else si
+                  ) sr (SplitMessage (dimindex(:'r)) m) in
+                (* let sf = AUX_FEED_MITB mitbf sr m in  *)
+                  (* learn digest by skipping *)
+                  let (s1,rdy1,digest) = mitbf (sf,(T,F, (ZERO: 'r word),0)) in 
+                  (* two consecutive moves to re-initialise vmem *)
+                  let (s2,rdy2,dig2) = mitbf (s1,(F,T, (ZERO: 'r word),0)) in 
+                  let (s3,rdy3,dig3) = mitbf (s2,(F,T, (ZERO: 'r word),0)) in
+                    ((s3,F),(Proto_toEnv digest))
+          )
+          /\
+          ( PROTO mitbf (s,F) (EnvtoP (Corrupt)) =
+                ((s,T),(Proto_toEnv 0w)))
+          /\
+          (* Give adversary blackbox access when corrupted *)
+          ( PROTO mitbf (s,T) (AtoP i) =
+            let (s_next,rdy,dig) = mitbf (s,i) in
+                ((s_next,T), (Proto_toA (rdy,dig))))
+          /\
+          (* Ignore honest queries when corrupted *)
+          ( PROTO mitbf (s,T) (EnvtoP _) = ((s,T),(Proto_toEnv 0w)))
+          /\
+          (* Ignore adversarial queries when not corrupted *)
+          ( PROTO mitbf (s,F) (AtoP _) = ((s,F),(Proto_toA ( F,0w ))) )
+          /\
+          (* Ignore the rest TODO : get rid of this and replace with individual
+          * cases.. *)
+          ( PROTO mitbf (s,cor) _ = ((s,cor),(Proto_toEnv 0w)))
+                `;
 
 (* Sanity test *)
 val RUN = RESTR_EVAL_CONV [``ZEROS``];
@@ -877,6 +554,12 @@ RUN ``EXEC_LIST (PROTO (MITB_STEP (r,c,n) (\m.m)) (r,c,n))
   ``;
 *)
 
+
+val word_take_def =
+  Define `
+    ( word_take:'a word -> 'b word) w = (dimindex(:'b)-1 >< 0) w
+    `;
+
 (* Sim can make queries to F, but only on the adversarial interface. It should
 * not alter F's state directly. It should not read its state either, but we
 * cheat a little: the corrupt variable from F's state is used -- this should
@@ -887,56 +570,66 @@ RUN ``EXEC_LIST (PROTO (MITB_STEP (r,c,n) (\m.m)) (r,c,n))
 *)
 val SIM_def =
   Define `
-(SIM (r,c,n) (T,Ready,vm,m) (EnvtoA (T,_,_,_)) = ((T,Ready,vm,m),(Adv_toEnv
-(T::(vm)))))
+(SIM (T,Ready,(vm:'n word) ,m) (EnvtoA (T,_,_,_)) = ((T,Ready,vm,m),(Adv_toEnv
+(T,vm))))
     /\
-(SIM (r,c,n) (T,Absorbing,vm,m) (EnvtoA (T,_,_,_)) =
-    ((T,Absorbing,vm,m),(Adv_toEnv (F::(ZEROS n)))))
+(SIM (T,Absorbing,vm,m) (EnvtoA (T,_,_,_)) =
+    ((T,Absorbing,vm,m),(Adv_toEnv (F,ZERO))))
     /\
-(SIM (r,c,n) (T,AbsorbEnd,vm,m) (EnvtoA (T,_,_,_)) =
-((T,AbsorbEnd,vm,m),(Adv_toEnv (F::(ZEROS
-n)))))
+(SIM (T,AbsorbEnd,vm,m) (EnvtoA (T,_,_,_)) =
+((T,AbsorbEnd,vm,m),(Adv_toEnv (F,ZERO))))
     /\
-(SIM (r,c,n) (T,Ready,vm,m) (EnvtoA (F,T,_,_)) = ((T,Absorbing,vm,[]),(Adv_toEnv
-(F::(ZEROS n )))))
+(SIM (T,Ready,vm,m) (EnvtoA (F,T,_,_)) = ((T,Absorbing,vm,[]),(Adv_toEnv
+(F,ZERO ))))
     /\
-(SIM (r,c,n) (T,Absorbing,vm,m) (EnvtoA (F,T,_,_)) = 
-((T,Ready,(ZEROS (r+c)),m),(Adv_toEnv (T::(ZEROS n)))))
+(SIM (T,Absorbing,vm,m) (EnvtoA (F,T,_,_)) = 
+((T,Ready,ZERO ,m),(Adv_toEnv (T,ZERO ))))
     /\
-(SIM (r,c,n) (T,AbsorbEnd,vm,m) (EnvtoA (F,T,_,_)) = 
-((T,Ready,(ZEROS (r+c)),m),(Adv_toEnv (T::(ZEROS n)))))
+(SIM (T,AbsorbEnd,vm,m) (EnvtoA (F,T,_,_)) = 
+((T,Ready,ZERO ,m),(Adv_toEnv (T,ZERO ))))
     /\
-(SIM (r,c,n) (T,Absorbing,vm,m) (EnvtoA (F,F,inp,inp_size)) =
- if (inp_size=r) then  
-  ((T,Absorbing,(ZEROS (r+c)),m++(TAKE inp_size inp)),(Adv_toEnv (F::(ZEROS n))))
- else 
-   (if (inp_size=r-1) then
-      ((T,AbsorbEnd,(ZEROS (r+c)),m++(TAKE inp_size inp)),(Adv_toEnv (F::(ZEROS
-      n))))
-    else ( if inp_size<r-1 then
-      (* Send to Functionality for communication. Proceed when response is
-      * received, see (MARK) *)
-      ((T,Absorbing,vm,[]),(Adv_toP (OracleQuery (m++(TAKE inp_size inp)))))
-           else (*if inp_size>r *)
-           ARB(* CONTINUE HERE *)
-    )))
+(SIM (T,Absorbing,(vm: 'n word),m) (EnvtoA (F,F,(inp: 'r word),inp_size)) =
+ let r = dimindex(:'r) in
+   (* TODO: Consider cutting the messages here already.
+   * Cases:
+   *  inp_size=r) take full block
+   *  inp_size=r-1 add 1, goto absorb end and add zeros in the next step
+   *  inp_size<r-1 query oracle.
+   *  *)
+   if (inp_size=r) then
+    ((T,Absorbing,ZERO, ((inp,inp_size)::m)),(Adv_toEnv (F,ZERO)))
+   else  
+    if (inp_size=r-1) then
+      ((T,AbsorbEnd,ZERO,((inp,inp_size)::m)),(Adv_toEnv (F,ZERO)))
+    else 
+      if inp_size<r-1 then
+      (*  Send to Functionality for communication. Proceed when response is *)
+      (* received, see (MARK)  *)
+      ((T,Absorbing,vm,[]),(Adv_toP (OracleQuery ([(*Dummy for now*)] ))))
+           else (*if inp_size>r behave like Skip*)
+      ((T,Absorbing,vm,m),(Adv_toEnv (F,ZERO)))
+    (* ) *)
+    ) 
     /\
-(SIM (r,c,n) (T,AbsorbEnd,vm,m) (EnvtoA (F,F,inp,inp_size)) =
-      ((T,AbsorbEnd,vm,[]),(Adv_toP (OracleQuery (m++(TAKE inp_size inp))))))
+(SIM (T,AbsorbEnd,vm,m) (EnvtoA (F,F,inp,inp_size)) =
+      ((T,AbsorbEnd,vm,[]),(Adv_toP (
+       OracleQuery ([ (*Dummy, for now *) ])
+       (* m++(TAKE inp_size inp) *)
+       ))))
     /\
 (* MARK *)
-(SIM (r,c,n) (T,_,vm,m) (PtoA (OracleResponse hashvalue)) =
-((T,Ready,hashvalue,[]),(Adv_toEnv (T::hashvalue))))
+(SIM (T,_,vm,m) (PtoA (OracleResponse hashvalue)) =
+((T,Ready,hashvalue,[]),(Adv_toEnv (T,hashvalue))))
     /\
 (* If FMAC was corrupted, change corruption state *)
-(SIM (r,c,n) (F,cntl,vm,m) (PtoA WasCorrupted) = ((T,cntl,vm,m),(Adv_toP
+(SIM (F,cntl,vm,m) (PtoA WasCorrupted) = ((T,cntl,vm,m),(Adv_toP
 (CorruptACK))))
     /\
 (* Ignore other queries while not corrupted *)
-(SIM (r,c,n) (F,cntl,vm,m) (EnvtoA _) = ((F,cntl,vm,m),(Adv_toEnv [])))
+(SIM (F,cntl,vm,m) (EnvtoA _) = ((F,cntl,vm,m),(Adv_toEnv (F,ZERO))))
     /\
 (* Ignore other queries *)
-(SIM (r,c,n) (T,cntl,vm,m) (EnvtoA _) = ((T,cntl,vm,m),(Adv_toEnv [])))
+(SIM (T,cntl,vm,m) (EnvtoA _) = ((T,cntl,vm,m),(Adv_toEnv (F,ZERO))))
       `;
 
 (* Sanity test *)
@@ -978,20 +671,51 @@ RUN `` EXEC_LIST
 val _ = 
  type_abbrev
   ("real_game_state", 
-   ``:mitb_state # bool ``);
-(*                 ^ corruption status *)
+   ``: (('c,'r) mitb_state # bool) # num list ``);
+(*                           ^ corruption status *)
+
+val _ = type_abbrev ("sim_plus_ideal_game_state", 
+   ``: (bits # bool) #('c,'r)  mitb_state ``);
+(*               ^ corruption status *)
+
+val _ = type_abbrev ("ideal_game_state", ``: (bits # bool) ``);
+(*               ^ corruption status *)
+
+(* ('n,'r) real_message is *)
+val _ = type_abbrev ("real_message", 
+    ``: ('r mac_query, 'r mitb_inp,  'n word,
+     'n mitb_out , 'n mitb_out ,'r mitb_inp ) Message ``);
+
+(* ('n,'r) adv_message is *)
+val _ = type_abbrev ("adv_message", 
+    ``: ( 
+    'r mitb_inp,
+     'n mitb_out 
+     ) AdvMessage ``);
+
+val _ = type_abbrev ("env_message", 
+    ``: ('r mac_query, 'r mitb_inp  ) EnvMessage ``);
 
 (* We instantiate the real world with the protocol using the MITB, given
 * parameters and the compression function *)
 (* TODO Does not work I can't see why *)
+
+val REAL_DUMMY_ADV_def = 
+  Define `
+ REAL_DUMMY_ADV  _ (m : ('n,'r) real_message)
+=
+    (DUMMY_ADV 0 m)`;
+
+(* val MITB_GAME_def = *) 
+(*     Define ` *)
+(*       MITB_GAME f *) 
+(*         = *) 
+(*        EXEC_STEP *)  
+(*        ( PROTO ( (MITB_STEP:('c,'n,'r) mitbstepfunction) f)) *)
+(*        REAL_DUMMY_ADV *)
+(*         `; *)
+
 (*
-val MITB_GAME_def = 
-    Define `
-      MITB_GAME (r,(c:num),(n:num)) (f: bits -> bits ) 
-        = 
-      EXEC_STEP (PROTO (MITB_STEP (r,c,n) f) (r,c,n)) 
-        DUMMY_ADV 
-         `;
 
 val ALMOST_IDEAL_GAME_def = 
     Define `
@@ -1002,12 +726,6 @@ val ALMOST_IDEAL_GAME_def =
       `
       *)
       
-val _ = type_abbrev ("sim_plus_ideal_game_state", 
-   ``: (bits # bool) # mitb_state ``);
-(*               ^ corruption status *)
-
-val _ = type_abbrev ("ideal_game_state", ``: (bits # bool) ``);
-(*               ^ corruption status *)
 
 
 (* warmup: show that corruption status is preserved *)
@@ -1070,34 +788,34 @@ val rws =
   [EXEC_STEP_def,LET_THM,ENV_WRAPPER_def,ROUTE_THREE_def,ROUTE_def,
    SIM_def,ADV_WRAPPER_def,DUMMY_ADV_def,PROTO_def,MITB_STEP_def,
    MITB_def,MITB_FUN_def,PROTO_WRAPPER_def,STATE_INVARIANT_def,FMAC_def,
-   STATE_INVARIANT_COR_def]
+   STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def]
 
 (* We show that, given that the complete invariant holds, the corruption part of
 * the invariant holds. 
 * *)
 val Invariant_cor = prove(
- ``! r c n f h
+ ``! f h
      (* The MITB's state in the real game *)
-     (cntl:control) (pmem:bits) (vmem:bits)  (cor_r:bool)
+     (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
      (* The functionality's state (cor_s is shared with Sim)*)
       k cor_f
       (* The simulator's state *)
       cor_s cntl_s vm_s m_s 
       (* The environment's query *)
       input.
-        (GoodParameters (r,c,n))
+        (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
         /\ 
         (STATE_INVARIANT ((cntl,pmem,vmem),cor_r)
         ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
       ==>
       let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r) =
-      EXEC_STEP (PROTO (MITB_STEP (r,c,n) f) (r,c,n)) 
-      DUMMY_ADV ((((cntl,pmem,vmem),cor_r),[]),input)
+      EXEC_STEP (PROTO (MITB_STEP f)) 
+      DUMMY_ADV ((((cntl,pmem,vmem),cor_r),0),input)
       in
         (
         let 
         (((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)),out_i) =
-           EXEC_STEP ( FMAC (r,c,n) h) (SIM (r,c,n))
+           EXEC_STEP ( FMAC  h) SIM 
                       (((k,cor_f),(cor_s,cntl_s,vm_s,m_s)),input)
         in
         (STATE_INVARIANT_COR ((cntl_n,pmem_n,vmem_n), cor_r_n)
@@ -1112,6 +830,8 @@ val Invariant_cor = prove(
     >- (
       split_all_pairs_tac >>
       split_all_control_tac >>
+      Cases_on `cor_f` >>
+      fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def] >>
       split_all_bools_tac >>
       fsrw_tac [ARITH_ss] rws >> rw[] >>
       BasicProvers.EVERY_CASE_TAC >>
@@ -1124,7 +844,7 @@ val Invariant_cor = prove(
       Cases_on`cor_f`>>Cases_on`cntl_s`>>fs[SIM_def,ROUTE_def]
       BasicProvers.EVERY_CASE_TAC
       fs[FMAC_def]
-      a case goes here )
+      (* ALMOST THERE ;) *)
     >>
      b case goes here
 

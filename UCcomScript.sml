@@ -172,9 +172,9 @@ val TEST_ADV_def =
 
 val DUMMY_ADV_def =
   Define
-  ` (DUMMY_ADV _ (EnvtoA m) = (NIL,(Adv_toP m)))
+  ` (DUMMY_ADV (_: num ) (EnvtoA m) = (0,(Adv_toP m)))
   /\
-    (DUMMY_ADV _ (PtoA m) = (NIL,(Adv_toEnv m)))
+    (DUMMY_ADV (_: num)  (PtoA m) = (0,(Adv_toEnv m)))
     `
 
 val _ = export_theory()
