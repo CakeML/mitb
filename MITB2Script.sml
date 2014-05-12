@@ -837,16 +837,28 @@ val Invariant_cor = prove(
       BasicProvers.EVERY_CASE_TAC >>
       fsrw_tac [ARITH_ss] rws >> rw[] >>
       fsrw_tac[ARITH_ss][]
-
-      PairCases_on`a` >>
-      fs[EXEC_STEP_def,LET_THM,ENV_WRAPPER_def,ROUTE_THREE_def] >>
-      fs[ROUTE_def,LET_THM,SIM_def] >>
-      Cases_on`cor_f`>>Cases_on`cntl_s`>>fs[SIM_def,ROUTE_def]
-      BasicProvers.EVERY_CASE_TAC
-      fs[FMAC_def]
-      (* ALMOST THERE ;) *)
+      fs [GoodParameters_def] >>
+      `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >>
+      fsrw_tac [ARITH_ss] rws
+      )
     >>
-     b case goes here
+      split_all_pairs_tac >>
+      split_all_control_tac >>
+      Cases_on `cor_f` >>
+      fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def] >>
+      split_all_bools_tac >>
+      Cases_on `b` >>
+      fsrw_tac [ARITH_ss] rws >> rw[] >>
+      (* 27 cases to go .. *)
+
+      Cases_on `LENGTH blk`
+
+      fs rws
+
+      BasicProvers.EVERY_CASE_TAC >>
+      fsrw_tac [ARITH_ss] rws >> rw[] >>
+      fsrw_tac[ARITH_ss][]
+
 
     (PairCases_on`a` ORELSE Cases_on`b`) >>
 
