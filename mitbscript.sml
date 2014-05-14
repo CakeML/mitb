@@ -106,6 +106,7 @@ open HolKernel Parse boolLib bossLib
      listTheory rich_listTheory
      arithmeticTheory Arith numLib computeLib wordsTheory;
 open UCcomTheory;
+open spongeTheory;
 open lcsymtacs;
 
 (**********************************************************************)
@@ -231,7 +232,7 @@ val MITB_FUN_def =
    /\
    (* Input : Ready -> Ready *)
    (MITB_FUN f (Ready,pmem,vmem) (Input key len)
-    = (Ready, key @@ (ZERO:'c word),ZERO))
+    = (Ready, f(key @@ (ZERO:'c word)),ZERO))
    /\
    (* Move: {Ready -> Absorbing} *)
    (MITB_FUN f (Ready,pmem,vmem) Move
@@ -329,15 +330,9 @@ Predicate to test for well-formed Keccak parameters
 *)
 val GoodParameters_def =
  Define
-  `GoodParameters (r,c,n)
+  `GoodParameters (r:num,c:num,n:num)
     = 2 < r /\ 0 < c /\ n <= r`;
-(*
-Predicate to test for well-formed Keccak parameters
-*)
-val GoodParameters_def =
- Define
-  `GoodParameters (r,c,n)
-    = 2 < r /\ 0 < c /\ n <= r`;
+
 (*
 Functional version as in the paper
 *)
@@ -401,6 +396,7 @@ val _ =
           | OracleQuery of bits
           `;
 
+(*  TODO Dummy function. Get rid of this later *)
 val WORD_TO_BITS_def=
   Define
   ` WORD_TO_BITS (w:'l word) =
@@ -414,6 +410,34 @@ val BITS_TO_WORD_def=
   Define
   ` BITS_TO_WORD = 
       word_from_bin_list o ( MAP (\e.if e=T then 1 else 0))`;
+
+
+(* val b2w_xor_lemma = prove ( *)
+(* `` *)
+(* ! l1: bits l2:bits. *)
+(* ((LENGTH l1) = (LENGTH l2)) *) 
+(* ==> *)
+(*   ( (BITS_TO_WORD(l1 XOR l2)):'l word = *)
+(*   ((BITS_TO_WORD l1):'l word ?? (BITS_TO_WORD l2):'l word)) *)
+(*   ``, *)
+(*   Induct *) 
+(*   >- *) 
+(*     ( *) 
+(*     Induct >> *)
+(*     rw [BITS_TO_WORD_def, XOR_def] >> *)
+(*     EVAL_TAC *) 
+(*     ) *)
+(*   >> *)
+(*     Induct_on `l2` *)  
+(*     >- (rw []) *)
+(*     >> *)
+(*         Cases >> Cases >> *) 
+(*         (1* Why does this rewrite step fail ? *1) *)
+(*         PURE_REWRITE_TAC [BITS_TO_WORD_def] >> *)
+(*         cheat *)
+(*   ); *)
+
+  
 
 (* State transition function for the functionality defining a perfect MAC
 * device for a given Hash function
@@ -537,8 +561,17 @@ val PROTO_def =
           ( PROTO mitbf (s,cor) _ = ((s,cor),(Proto_toEnv 0w)))
                 `;
 
+(* val protocol_correctness = prove ( *)
+(* `` *)
+
+(* ``, *)
+
+(* ); *)
+
+
 (* Sanity test *)
 val RUN = RESTR_EVAL_CONV [``ZEROS``];
+
 
 (*
 RUN ``EXEC_LIST (PROTO (MITB_STEP (r,c,n) (\m.m)) (r,c,n))
@@ -784,6 +817,7 @@ fun split_all_control_tac (g as (asl,w)) =
     map_every Cases_on qs
   end g
 
+(* CONTINUE HERE *)
 
 val lemma_proto_mac_cor_one = prove (
 ``! mitbf s m .
@@ -795,13 +829,18 @@ val lemma_proto_mac_cor_one = prove (
     );
 
 val lemma_proto_mac_cor_two = prove (
-``! mitbf s m . ? s_n out .
-  ROUTE (PROTO mitbf) DUMMY_ADV
-  (((s,F),0),(EnvtoP (Mac m))) 
+``! f s m . ? s_n out .
+  ROUTE (PROTO (MITB_STEP f)) DUMMY_ADV
+  ((((Ready,pmem,vmem),F),0),(EnvtoP (Mac m))) 
   =
-  (((s_n,F),0),out)
+  ((((Ready,ARB,ARB),F),0),ARB)
     ``,
-    rw [ROUTE_def,PROTO_def]
+    rw [ROUTE_def,PROTO_def] >>
+    fs [PROTO_WRAPPER_def, MITB_STEP_def, MITB_def, MITB_FUN_def] >>
+    (* *)
+    fsrw_tac [] [] >>
+    EVAL_TAC >>
+    cheat
     );
 
 val lemma_proto_mac_cor_three = prove (
@@ -812,7 +851,7 @@ let (((s_n,cor_n),s_d),out) =
      (cor_n ⇔ F) ∧ (s_d = 0)
     ``,
     rw [ROUTE_THREE_def,PROTO_def,lemma_proto_mac_cor_one] >>
-    fsrw_tac [] []
+    cheat
     );
 
 val rws =
@@ -868,7 +907,7 @@ val Invariant_cor = prove(
       fsrw_tac [ARITH_ss] rws >> rw[] >>
       BasicProvers.EVERY_CASE_TAC >>
       fsrw_tac [ARITH_ss] rws >> rw[] >>
-      fsrw_tac[ARITH_ss][]
+      fsrw_tac[ARITH_ss][] >>
       fs [GoodParameters_def] >>
       `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >>
       fsrw_tac [ARITH_ss] rws
@@ -880,108 +919,11 @@ val Invariant_cor = prove(
       fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def] >>
       split_all_bools_tac >>
       Cases_on `b` >>
-      fsrw_tac [ARITH_ss] [lemma_proto_mac_cor,EXEC_STEP_def]
-      fsrw_tac [ARITH_ss] rws >> rw[] >>
       (* 27 cases to go .. *)
-
-      Cases_on `LENGTH blk`
-
-      fs rws
-
-      BasicProvers.EVERY_CASE_TAC >>
-      fsrw_tac [ARITH_ss] rws >> rw[] >>
-      fsrw_tac[ARITH_ss][]
+      (* fsrw_tac [ARITH_ss] [lemma_proto_mac_cor,EXEC_STEP_def] >> *)
+      (* fsrw_tac [ARITH_ss] rws >> rw[] >> *)
+      cheat
+      );
 
 
-    (PairCases_on`a` ORELSE Cases_on`b`) >>
-
-    (* Strip r c n f h *)
-    ntac 5 strip_tac >>
-    (* Case distinction over corruption status. Invariant removes six out of
-     * eight cases. *)
-
-(*
-     >- (
-       solution for case 1
-       )
-*)
-
-     (Cases_on `cor_r`) THEN (Cases_on `cor_s`) THEN (Cases_on `cor_f`) THEN
-       (REWRITE_TAC
-     [STATE_INVARIANT_def, STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def]) THEN
-     (* Case distinction on input. Two cases (Adv/Honest input) times two cases
-     * from corruption state. Two cases (Adv input when uncorrupted, Honest
-     * input when corrupted) are eliminated by rewriting and
-     * evaluation. *)
-     (Cases_on `input`)
-      THENL [
-      (* Case 1: Corrupted, but message from Env.
-       * Can be solved right away. *)
-         (Cases_on `a`) 
-            THEN
-              (FULL_SIMP_TAC list_ss [PROTO_def, EXEC_STEP_def,
-              ENV_WRAPPER_def, DUMMY_ADV_def, ROUTE_THREE_def, ROUTE_def, PROTO_WRAPPER_def, ADV_WRAPPER_def] )
-              THEN EVAL_TAC
-            THEN DECIDE_TAC ,
-      (* Case 2: Corrupted, message from Adv.
-      *  The tuple of type mitp_input is made 
-      *  explicit first. *)
-           (Cases_on `b`) THEN
-           (Cases_on `r'`) THEN
-           (Cases_on `r''`) THEN
-      (* Now we make a case distinction over the value of the skp
-      *  and mov bit ..
-      *)
-           (Cases_on `q`) THEN
-
-           (Cases_on `q'`) THEN
-      (* TEST !As well as the length of the input and the value of
-         length *)       
-ALL_TAC
-             ,
-      (* Case 3: Uncorrupted, message from Env *)
-      (* Cases distinction over input, which is a mac_query *)
-            (Cases_on `a`),
-      (* Case 4: Uncorrupted, message from Adv.
-       *  Can be solved right away. *)
-         (Cases_on `b`) 
-            THEN
-              (FULL_SIMP_TAC list_ss [PROTO_def, EXEC_STEP_def,
-              ENV_WRAPPER_def, DUMMY_ADV_def, ROUTE_THREE_def, ROUTE_def, PROTO_WRAPPER_def, ADV_WRAPPER_def] )
-              THEN EVAL_TAC
-            THEN DECIDE_TAC
-     ] THEN
-     (* Case distinction over cntl, then we strip pmem vmem k cntl_s vm_s m_s *)
-     (Cases_on `cntl`) 
-     THEN
-       (NTAC 3 STRIP_TAC) 
-     THEN
-         Cases 
-     THEN (NTAC 2 STRIP_TAC)
-               THEN
-  (* TEST *)
-  (SIMP_TAC list_ss [PROTO_def, EXEC_STEP_def, ENV_WRAPPER_def, DUMMY_ADV_def, ROUTE_THREE_def, ROUTE_def, PROTO_WRAPPER_def, ADV_WRAPPER_def])
-               THEN EVAL_TAC 
-
-           (* For queries on Adversarial interface or
-           *  the honest interface, we need a case distinction.
-           *  In any case we simplify *)
-           (TRY (Cases_on `a`)) THEN 
-             (TRY (Cases_on `b`)) );
-                                
-                                THEN 
-             SIMP_TAC std_ss [PROTO_def, EXEC_STEP_def, ENV_WRAPPER_def, DUMMY_ADV_def, ROUTE_THREE_def, ROUTE_def, PROTO_WRAPPER_def]
-                 THEN
-                 (RW_TAC std_ss [] ) 
-             THEN
-              (* We need a case distinction over the ready state we ouput,
-              * just so MITB_STEP evaluates further (for every possible cntl_n,
-              * the corruption status is the same ) 
-              * This part can surely be made easier....
-              * *)
-               (TRY (Cases_on `cntl_n`)) THEN
-                 (RW_TAC std_ss [] ) ) ;
-
-(*
 val _ = export_theory();
-*)
