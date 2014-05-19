@@ -102,9 +102,17 @@ The changes to Robert's original design are:
 
 *)
 
-open HolKernel Parse boolLib bossLib
-     listTheory rich_listTheory
-     arithmeticTheory Arith numLib computeLib wordsTheory;
+open HolKernel;
+open Parse;
+open boolLib;
+open bossLib;
+open listTheory;
+open rich_listTheory;
+open arithmeticTheory;
+open Arith;
+open numLib;
+open computeLib;
+open wordsTheory;
 open UCcomTheory;
 open spongeTheory;
 open lcsymtacs;
@@ -820,103 +828,31 @@ fun split_all_control_tac (g as (asl,w)) =
     map_every Cases_on qs
   end g
 
-(* CONTINUE HERE *)
+fun split_applied_pair_tac tm =
+  let
+    val (f,p) = dest_comb tm
+    val (x,b) = pairSyntax.dest_pabs f
+    val xs = pairSyntax.strip_pair x
+    val g = list_mk_exists(xs,mk_eq(p,x))
+    val th = prove(g, SIMP_TAC bool_ss [GSYM pairTheory.EXISTS_PROD])
+  in
+    strip_assume_tac th
+  end
 
-val lemma_proto_mac_cor_one = prove (
-``! mitbf s m .
-  let (((s_n,cor_n),s_d),out) = ROUTE (PROTO mitbf) DUMMY_ADV
-  (((s,F),0),(EnvtoP (Mac m))) in
-    ((cor_n=F) /\ (s_d=0))
-    ``,
-    rw [ROUTE_def,PROTO_def]
-    );
-
-val lemma_proto_mac_cor_two = prove (
-``! f s m . ? s_n out.
-  ROUTE (PROTO (MITB_STEP f)) DUMMY_ADV
-  (((s,F),0),(EnvtoP (Mac m))) 
-  =
-  (((s_n,F),0),out)
-    ``,
-    (ntac 3 strip_tac) >> 
-    (rewrite_tac [ROUTE_def,PROTO_def, PROTO_WRAPPER_def]) >>
-    (CONV_TAC SWAP_EXISTS_CONV) >>
-    (* Why doesn't this work ? *)
-    (* exists_tac (``PROTO_WRAPPER bla``)>> *)
-    (* exists_tac (``new``) *)
-    (* Why doesn't this work ? *)
-    (* exists_tac (Term ` *)
-(* let (s0,rdy0,dig0) = MITB_STEP f (s,T,F,ZERO,0) in *)
-    (*       let (sr,rdyr,digr) = *)
-    (*             if ¬rdy0 then MITB_STEP f (s0,F,T,ZERO,0) *)
-    (*             else (s0,rdy0,dig0) *)
-    (*       in *)
-    (*       let sf = *)
-    (*             FOLDR *)
-    (*               (λblk state. *)
-    (*                  (let (si,rdyi,dgi) = *)
-    (*                         MITB_STEP f *)
-    (*                           (state,F,F,BITS_TO_WORD blk,LENGTH blk) *)
-    (*                   in *)
-    (*                     if LENGTH blk = dimindex (:α) − 1 then *)
-    (*                       (let (sl,rdyl,dgl) = *)
-    (*                              MITB_STEP f (si,F,F,ZERO,0) *)
-    (*                        in *)
-    (*                          sl) *)
-    (*                     else si)) sr (SplitMessage (dimindex (:α)) m) *)
-    (*       in *)
-    (*       let (s1,rdy1,digest) = MITB_STEP f (sf,T,F,ZERO,0) in *)
-    (*       let (s2,rdy2,dig2) = MITB_STEP f (s1,F,T,ZERO,0) in *)
-    (*       let (s3,rdy3,dig3) = MITB_STEP f (s2,F,T,ZERO,0) *)
-    (*       in *)
-    (* s3`) *)
-    (* >> *)
-    cheat
-    );
-
-val lemma_proto_mac_cor_three = prove (
-``! mitbf s m . ? s_n dig.
-  ROUTE (PROTO mitbf) DUMMY_ADV
-  (((s,F),0),(EnvtoP (Mac m): ('n,'r) real_message)) 
-  =
-  (((s_n,F),0),PtoE dig)
-    ``,
-    (ntac 3 strip_tac) >> 
-    (rewrite_tac [ROUTE_def,PROTO_def, PROTO_WRAPPER_def]) >>
-    (rewrite_tac [PROTO_WRAPPER_def]) >>
-    (CONV_TAC SWAP_EXISTS_CONV) >>
-    cheat
+val lemma_proto_mac_cor_one_andahalf = prove (
+ ``
+ (ROUTE (PROTO mitbf) DUMMY_ADV state_inp = state_out) ⇒
+ (state_inp = (((s,F),0),EnvtoP (Mac m)))
+ ⇒
+ (?dig foo bar .
+ (state_out = (((foo,F),0),PtoEnv dig)))
+ ``,
+ rw [] >> 
+    simp [ROUTE_def,PROTO_def, pairTheory.UNCURRY, PROTO_WRAPPER_def] 
     );
 
 
-val lemma_proto_mac_cor_four = prove (
-``! mitbf s m . ? s_n dig.
-    ROUTE_THREE (PROTO mitbf) DUMMY_ADV (((s,F),0),EnvtoP (Mac m)) =
-(((s_n,F),0),out)
-    ``,
-    (ntac 3 strip_tac) >>
-    CHOOSE_THEN CHOOSE_TAC (SPEC_ALL lemma_proto_mac_cor_three)  >>
-    PURE_REWRITE_TAC [ROUTE_THREE_def] >> 
-    (* Why does this not work? *)
-    ASM_SIMP_TAC arith_ss [] >> 
-    cheat
-    );
 
-val lemma_proto_mac_cor_five = prove (
-``
- ? s_n dig.
-    ROUTE_THREE (PROTO mitbf) DUMMY_ADV (((s,F),0),EnvtoP (Mac m)) =
-(((s_n,F),0),out)
-    ``,
-    CHOOSE_THEN CHOOSE_TAC (SPEC_ALL lemma_proto_mac_cor_three)  >>
-    exists_tac ``s_n:(β, α) mitb_state`` >> 
-    (* here it fails *)
-    exists_tac ``dig: δ`` >>
-    FULL_SIMP_TAC arith_ss  [] >>
-    PURE_REWRITE_TAC [ROUTE_THREE_def] >> 
-    (* Why does this not work? *)
-    cheat
-    );
 
 (* val lemma_proto_mac_closed_form = prove ( *)
 (* `` *)
@@ -939,6 +875,17 @@ val rws =
    MITB_def,MITB_FUN_def,PROTO_WRAPPER_def,STATE_INVARIANT_def,FMAC_def,
    STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def]
 
+fun PairCases_on_tm tm (g as (asl,w)) =
+let
+  val vs = free_varsl(w::asl)
+  val p = variant vs (mk_var("p",type_of tm))
+  val eq = mk_eq(p,tm)
+in
+  markerLib.ABBREV_TAC eq >>
+  PairCases_on([QUOTE(fst(dest_var p))]) >>
+  PAT_ASSUM``Abbrev(^eq)``(ASSUME_TAC o SYM o
+    PURE_REWRITE_RULE[markerTheory.Abbrev_def])
+end g
 
 (* We show that, given that the complete invariant holds, the corruption part of
 * the invariant holds. 
@@ -992,6 +939,7 @@ val Invariant_cor = prove(
       fsrw_tac [ARITH_ss] rws
       )
     >> (*Input to protocol *)
+    (
       Cases_on `cor_f` 
       >- 
       ( (* cor_f T  (proto ignores messages) *)
@@ -1003,33 +951,36 @@ val Invariant_cor = prove(
         fs[STATE_INVARIANT_COR_def]
       )
       >> (*cor_f F *)
-      split_all_pairs_tac >>
-      split_all_control_tac >>
-      fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def,
-      STATE_INVARIANT_COR_def] >>
-      split_all_bools_tac >>
-      Cases_on `b` >>
-      (* Cases_on `b=(Mac m)` >> *)
-      (* fs [EXEC_STEP_def,ENV_WRAPPER_def] >> *) 
-      (* fs [lemma_proto_mac_cor_four] >> *) 
-      (* (1* Can't specialise this theorem :/ *1) *)
-      (* ASSUME_TAC ( *)
-      (* SPECL [Term (`(MITB_STEP f):('c,'r) mitb_state # 'r mitb_inp -> ('c,'r) *)
-      (* mitb_state # 'n mitb_out`)] lemma_proto_mac_cor_four *)
-      (* ) *)
-      fsrw_tac [ARITH_ss] rws >> rw[] 
-      (* 27 cases to go .. *)
-
-      (* Too complext *)
-      ASSUME_TAC ( SPECL [``MITB_STEP f``]  lemma_proto_mac_cor_three) >> 
-      (* Loops *)
-        RULE_ASSUM_TAC EVAL_RULE >>
-        (* Can this be made simpler ?  Does not work though*)
-        RULE_ASSUM_TAC (CONV_RULE (TOP_DEPTH_CONV (ETA_CONV))) >>
-        
-        fs rws
-      (* fsrw_tac [ARITH_ss] [lemma_proto_mac_cor,EXEC_STEP_def] >> *)
-      cheat
-      );
+      (
+      Cases_on `? m. b=(Mac m)` 
+        >-
+        (
+          fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def] >>
+          (* we are here *)
+          fs[LET_THM] >>
+          last_assum(PairCases_on_tm o rand o rand o rand o lhs o concl) >>
+          first_assum(mp_tac o MATCH_MP
+            (GEN_ALL lemma_proto_mac_cor_one_andahalf)) >>
+          simp[] >> strip_tac >> fs[] >>
+          fs [ROUTE_def] >>
+          split_all_control_tac >>
+          split_all_pairs_tac >>
+          fsrw_tac [ARITH_ss] rws >> rw[] >>
+          simp []
+        )
+        >> 
+        (
+          Cases_on `b` >>
+          split_all_pairs_tac >>
+          split_all_control_tac >>
+          rw [] >>
+          fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def,
+          STATE_INVARIANT_COR_def] >>
+          split_all_bools_tac >>
+          fsrw_tac [ARITH_ss] rws >> rw[] 
+        )
+      )
+    )
+);
 
 val _ = export_theory();
