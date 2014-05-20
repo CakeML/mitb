@@ -556,7 +556,13 @@ val PROTO_def =
           ( PROTO mitbf (s,F) (EnvtoP (Corrupt)) =
                 ((s,T),(Proto_toEnv 0w)))
           /\
-          (* Give adversary blackbox access when corrupted *)
+          (* Give adversary blackbox access when corrupted, but
+           *  not complete: she is not allowed to set the key. *)
+          (* Ignore Key-overwrite *)
+          ( PROTO mitbf ((Ready,cntl,vmem),T) (AtoP (F,F,inp,len)) =
+            (((Ready,cntl,vmem),T), (Proto_toA (F,ZERO)))
+          )
+          /\
           ( PROTO mitbf (s,T) (AtoP i) =
             let (s_next,rdy,dig) = mitbf (s,i) in
                 ((s_next,T), (Proto_toA (rdy,dig))))
@@ -656,10 +662,14 @@ val SIM_def =
     ) 
     /\
 (SIM (T,AbsorbEnd,vm,m) (EnvtoA (F,F,inp,inp_size)) =
+  if (inp_size <= dimindex(:'r)) then
       ((T,AbsorbEnd,vm,[]),(Adv_toP (
        OracleQuery ([ (*Dummy, for now *) ])
        (* m++(TAKE inp_size inp) *)
-       ))))
+       )))
+  else (* behave like Skip *)
+      ((T,AbsorbEnd,vm,m),(Adv_toEnv (F,ZERO)))
+       )
     /\
 (* MARK *)
 (SIM (T,_,vm,m) (PtoA (OracleResponse hashvalue)) =
@@ -672,7 +682,8 @@ val SIM_def =
 (* Ignore other queries while not corrupted *)
 (SIM (F,cntl,vm,m) (EnvtoA _) = ((F,cntl,vm,m),(Adv_toEnv (F,ZERO))))
     /\
-(* Ignore other queries *)
+(* Ignore other queries, while corrupted, in particular: 
+ * query to set the key. *)
 (SIM (T,cntl,vm,m) (EnvtoA _) = ((T,cntl,vm,m),(Adv_toEnv (F,ZERO))))
       `;
 
@@ -789,7 +800,12 @@ val STATE_INVARIANT_CNTL_def =
     Define `
     STATE_INVARIANT_CNTL ((cntl,pmem,vmem),cor_r)
     ((k,cor_f),(cor_s,cntl_s,vm_s,m_s))=
-    cor_r ==> (cntl = cntl_s)
+    ((cor_r ==> (cntl = cntl_s))
+     /\
+     (~cor_r ==> (cntl = Ready) /\ (cntl_s = Ready ))
+     )
+    (*TODO Do we need more? We could assert that for cor_r=F,
+    * the MITB is alway in ready. But I wouldn't think we need this *)
     `;
 
 (* The complete invariant (which will grow in the future *)
@@ -849,6 +865,21 @@ val lemma_proto_mac_cor_one_andahalf = prove (
  ``,
  rw [] >> 
     simp [ROUTE_def,PROTO_def, pairTheory.UNCURRY, PROTO_WRAPPER_def] 
+    );
+
+val lemma_proto_mac_cor_two = prove (
+ ``
+ (ROUTE (PROTO (MITB_STEP f)) DUMMY_ADV state_inp = state_out) ⇒
+ (state_inp = (((s,F),0),EnvtoP (Mac m)))
+ ⇒
+ (?dig foo bar .
+ (state_out = ((((Ready,foo,bar),F),0),PtoEnv dig)))
+ ``,
+ rw [] >> 
+    simp [ROUTE_def,PROTO_def, pairTheory.UNCURRY,
+    PROTO_WRAPPER_def] >>
+    (* simp [MITB_STEP_def, MITB_FUN_def] *)
+    cheat
     );
 
 
@@ -982,5 +1013,120 @@ val Invariant_cor = prove(
       )
     )
 );
+
+(* We show that, given that the complete invariant holds, the control part of
+                                      * the invariant holds.  *)
+val Invariant_cntl = prove(
+ `` ! f h
+     (* The MITB's state in the real game *)
+     (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
+     (* The functionality's state (cor_s is shared with Sim)*)
+      k cor_f
+      (* The simulator's state *)
+      cor_s cntl_s vm_s m_s 
+      (* The environment's query *)
+      input.
+        (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
+        /\ 
+        (STATE_INVARIANT ((cntl,pmem,vmem),cor_r)
+        ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
+      ==>
+      let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r) =
+      EXEC_STEP (PROTO (MITB_STEP f)) 
+      DUMMY_ADV ((((cntl,pmem,vmem),cor_r),0),input)
+      in
+        (
+        let 
+        (((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)),out_i) =
+           EXEC_STEP ( FMAC  h) SIM 
+                      (((k,cor_f),(cor_s,cntl_s,vm_s,m_s)),input)
+        in
+        (STATE_INVARIANT_CNTL ((cntl_n,pmem_n,vmem_n), cor_r_n)
+        ((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)))
+        )
+        ``,
+    rw[] >>
+    `(cor_s = cor_r) /\ (cor_f = cor_r)` by
+      fs[STATE_INVARIANT_def, STATE_INVARIANT_COR_def] >>
+    `∃a b. (input = Env_toA a) ∨ (input = Env_toP b)` by (
+      Cases_on`input` >> rw[]) >>
+      rw[]
+      >- (* Input to Adv *)
+      (
+      split_all_pairs_tac >>
+      split_all_control_tac >>
+      Cases_on `cor_f` >>
+      fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def] >>
+      split_all_bools_tac >>
+      fsrw_tac [ARITH_ss] rws >> rw[] >>
+      BasicProvers.EVERY_CASE_TAC >>
+      fsrw_tac [ARITH_ss] rws >> rw[] >>
+      fs [GoodParameters_def] >>
+      `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >>
+      fsrw_tac [ARITH_ss] rws
+      )
+      >> (* Input to Proto *)
+      Cases_on `cor_f` 
+      >- 
+      ( (* cor_f T  (proto ignores messages) *)
+        split_all_pairs_tac >>
+        split_all_control_tac >>
+        Cases_on `b` >> 
+        fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def, ROUTE_def, PROTO_def, PROTO_WRAPPER_def] >> 
+        RULE_ASSUM_TAC EVAL_RULE >>
+        fs[STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def]
+      )
+      >> (*cor_f F *)
+      (
+      fs [STATE_INVARIANT_def, STATE_INVARIANT_COR_def,
+      STATE_INVARIANT_CNTL_def ] >>
+      Cases_on `? m. b=(Mac m)` 
+        >-
+        (
+          fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def] >>
+          (* we are here *)
+          fs[LET_THM] >>
+          last_assum(PairCases_on_tm o rand o rand o rand o lhs o concl) >>
+          first_assum(mp_tac o MATCH_MP
+            (GEN_ALL lemma_proto_mac_cor_two)) >>
+          simp[] >> strip_tac >> fs[] >>
+          fs [ROUTE_def] >>
+          split_all_control_tac >>
+          split_all_pairs_tac >>
+          fsrw_tac [ARITH_ss] rws >> rw[] >>
+          simp []
+        )
+        >> 
+        (
+          Cases_on `b` >>
+          split_all_pairs_tac >>
+          split_all_control_tac >>
+          rw [] >>
+          fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def,
+          STATE_INVARIANT_COR_def] >>
+          split_all_bools_tac >>
+          fsrw_tac [ARITH_ss] rws >> rw[] 
+        )
+        )
+);
+
+      
+val helper_theorem = prove(
+``( ! a . let b = f a in p b )
+ ==>
+ (! a . ? b. (b = f a) /\ p b)``,
+ rw [] >>
+ POP_ASSUM (ASSUME_TAC o EVAL_RULE o SPEC ``a``  ) >>
+ rw [] 
+      );
+
+val helper_theorem_two = prove(
+``(! a . ? b. (b = f a) /\ p b)
+ ==>
+( ! a . let b = f a in p b )
+ ``,
+ simp [] 
+      );
+
 
 val _ = export_theory();
