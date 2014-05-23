@@ -487,6 +487,21 @@ val FMAC_def =
 (* EVAL ``EXEC_LIST (FMAC  (\m.m)) DUMMY_ADV (((ZERO: word32),F),[]) *) 
 (* [Env_toP (Mac m)]``; *)
 
+
+(*
+Run MITB
+TODO Document
+*)
+val RunMITB_def =
+ Define
+  `RunMITB  mitbf s (i::il) = 
+  if (il=[]) then 
+     (mitbf (s,i))
+  else 
+     let (s', out) = (mitbf (s,i)) in
+       RunMITB  mitbf s' il
+       `;
+
 (* Function defining the protocol that implements FMAC using a MITB. In real
  * life, this protocol corresponds to a client library that computes hashes by
  * splitting the message and feeding it into the MITB. This is how honest users
@@ -519,7 +534,7 @@ val PROTO_def =
           /\
           ( PROTO mitbf (s,F) (EnvtoP (Mac m)) =
           (* Bring MITB into Ready state *)
-           let (s0,rdy0,dig0) = mitbf (s,(T,F,(ZERO: 'r word),0)) in
+           let (s0,(rdy0,dig0)) = mitbf (s,(T,F,(ZERO: 'r word),0)) in
            (* make sure that MITB is in Ready state *)
              let (sr,rdyr,digr) =
               ( if (rdy0=F) then
@@ -557,7 +572,10 @@ val PROTO_def =
                 ((s,T),(Proto_toEnv 0w)))
           /\
           (* Give adversary blackbox access when corrupted, but
-           *  not complete: she is not allowed to set the key. *)
+           *  not complete: she is not allowed to set the key.
+           * TODO: would be nicer if we would check the ready state via the LED
+           *
+           *  *)
           (* Ignore Key-overwrite *)
           ( PROTO mitbf ((Ready,cntl,vmem),T) (AtoP (F,F,inp,len)) =
             (((Ready,cntl,vmem),T), (Proto_toA (F,ZERO)))
@@ -917,6 +935,116 @@ in
   PAT_ASSUM``Abbrev(^eq)``(ASSUME_TAC o SYM o
     PURE_REWRITE_RULE[markerTheory.Abbrev_def])
 end g
+
+val mitb_skip_lemma = 
+  prove (
+  ``
+    (((cntl',pmem',vmem'),(rdy,dig)) = RunMITB (MITB_STEP f) (cntl,pmem,vmem) [(T,b,inp,len)] )
+    ==> 
+    ( cntl=cntl')
+    /\
+    ( pmem=pmem')
+    /\
+    ( vmem=vmem')
+    /\
+    (( rdy=T) ==> (cntl=Ready) )
+    /\
+    (( rdy=F) ==> (cntl=Absorbing) \/ (cntl=AbsorbEnd))
+    ``,
+split_all_pairs_tac >>
+split_all_control_tac >>
+fs [RunMITB_def, MITB_STEP_def, MITB_FUN_def, MITB_def] >>
+fsrw_tac [ARITH_ss] [LET_THM]
+);
+
+val put_in_ready_state_lemma = prove (
+``
+    (
+    (((cntl',pmem',vmem'),(rdy,dig)) = 
+     let ((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) =
+        RunMITB (MITB_STEP f) (cntl,pmem,vmem) [(T,b,inp,len)]
+      in
+        if (rdy_t=F) then
+          RunMITB (MITB_STEP f) (cntl_t,pmem_t,vmem_t) [(F,T,inp2,len2)] 
+        else
+          ((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t))
+     )
+    ==>
+    (
+    ( cntl'=Ready)
+    )
+    )
+    ``,
+    rw [LET_THM] >>
+    last_assum(PairCases_on_tm o rand o  rand o concl) >>
+    POP_ASSUM (ASSUME_TAC o SYM ) >> 
+    first_assum(mp_tac o MATCH_MP mitb_skip_lemma) >>
+    rw [] >>
+    Cases_on `p3` >> 
+    fs [] >> 
+    fs [RunMITB_def, MITB_STEP_def, MITB_FUN_def, MITB_def] >>
+    fsrw_tac [ARITH_ss] [LET_THM]
+    );
+
+val PROCESS_MESSAGE_LIST_def= Define
+`
+  (PROCESS_MESSAGE_LIST  [] = [])
+  /\
+  (PROCESS_MESSAGE_LIST (hd::tl) =
+      ( (F,F,(BITS_TO_WORD hd),(LENGTH hd)))::
+      (PROCESS_MESSAGE_LIST tl)
+  )`;
+
+val int_min_lemma = prove (
+  ``
+  (dimindex(:'n) > 0)
+  ==>
+  ((BITS_TO_WORD ((ZEROS (dimindex(:'n)-1))++[T])):'n word
+  = INT_MINw)
+  ``, 
+  cheat
+  (* rw [BITS_TO_WORD_def, word_from_bin_list_def, l2w_def ] >> *)
+  );
+
+val int_min_lemma_1152 = prove (
+  ``
+  ((BITS_TO_WORD ((ZEROS (1152-1))++[T])):1152 word
+  = INT_MINw)
+  ``, 
+  EVAL_TAC 
+  );
+
+
+
+val mac_message_lemma = prove (
+``! r m .
+   (
+   (r = dimindex(:'r))
+   /\
+   (((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) =
+        RunMITB 
+          (MITB_STEP: ('c,'n,'r)mitbstepfunction  f)
+          (Ready,pmem,vmem)
+        ((T,b,inp,len)
+         :: (PROCESS_MESSAGE_LIST
+              (SplitMessage (dimindex(:'r)) m))
+        )))
+    ==>
+    (( cntl'=Ready)
+    /\
+    ( pmem_t = pmem )
+    /\
+    ( vmem_t = BITS_TO_WORD (Hash (dimindex(:'r), dimindex(:'c), dimindex(:'n))
+            (WORD_TO_BITS o (f o BITS_TO_WORD ))
+            ( ZEROS (dimindex(:'r) + dimindex(:'c))) m))
+            )
+    ``,
+   recInduct(fetch "-" "SplitMessage_ind") >> 
+    rw [SplitMessage_def, DROP_def] >>
+    cheat
+    );
+
+
 
 (* We show that, given that the complete invariant holds, the corruption part of
 * the invariant holds. 
