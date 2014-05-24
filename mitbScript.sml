@@ -995,16 +995,52 @@ val PROCESS_MESSAGE_LIST_def= Define
       (PROCESS_MESSAGE_LIST tl)
   )`;
 
+val word_bit_word_from_bin_list = store_thm("word_bit_word_from_bin_list",
+  ``∀ls b.
+      EVERY ($> 2) ls ∧ b < LENGTH ls ⇒
+      (word_bit b ((word_from_bin_list ls):'a word) = b < dimindex (:'a) ∧ (EL b ls = 1))``,
+  rw[word_from_bin_list_def,l2w_def,word_bit_n2w] >>
+  rw[GSYM numposrepTheory.num_from_bin_list_def] >>
+  rw[numposrepTheory.BIT_num_from_bin_list] >>
+  rw[EQ_IMP_THM] >>
+  assume_tac DIMINDEX_GT_0 >>
+  DECIDE_TAC)
+
+val word_bit_BITS_TO_WORD = store_thm("word_bit_BITS_TO_WORD",
+  ``∀ls x. x < LENGTH ls ⇒ (word_bit x ((BITS_TO_WORD ls):'a word) = x < dimindex (:'a) ∧ EL x ls)``,
+  rw[BITS_TO_WORD_def] >>
+  qmatch_abbrev_tac`word_bit x (word_from_bin_list l) ⇔ y` >>
+  `EVERY ($> 2) l` by (
+    simp[Abbr`l`,EVERY_MAP,EVERY_MEM] >> rw[] ) >>
+  fs[Abbr`l`] >> simp[word_bit_word_from_bin_list] >>
+  simp[EL_MAP,Abbr`y`] >> rw[])
+
+val LENGTH_ZEROS = store_thm("LENGTH_ZEROS",
+  ``∀n. LENGTH (ZEROS n) = n``,
+  Induct >> simp[ZEROS_def])
+val _ = export_rewrites["LENGTH_ZEROS"]
+
+val EL_ZEROS = store_thm("EL_ZEROS",
+  ``∀n m. m < n ⇒ (EL m (ZEROS n) = F)``,
+  Induct >> simp[ZEROS_def] >> Cases >> simp[] )
+
 val int_min_lemma = prove (
   ``
   (dimindex(:'n) > 0)
   ==>
   ((BITS_TO_WORD ((ZEROS (dimindex(:'n)-1))++[T])):'n word
   = INT_MINw)
-  ``, 
-  cheat
-  (* rw [BITS_TO_WORD_def, word_from_bin_list_def, l2w_def ] >> *)
-  );
+  ``,
+  strip_tac >>
+  simp[GSYM WORD_EQ] >>
+  rw[] >>
+  qmatch_abbrev_tac`word_bit x (BITS_TO_WORD ls) ⇔ word_bit x INT_MINw` >>
+  `x < LENGTH ls` by ( simp[Abbr`ls`] ) >>
+  simp[word_bit_BITS_TO_WORD] >>
+  simp[word_bit_def,word_L,Abbr`ls`] >>
+  rev_full_simp_tac(srw_ss()++ARITH_ss)[] >>
+  Cases_on`x = dimindex(:'n)-1`>>fs[]>>simp[EL_APPEND1,EL_APPEND2] >>
+  simp[EL_ZEROS]);
 
 val int_min_lemma_1152 = prove (
   ``
@@ -1013,7 +1049,6 @@ val int_min_lemma_1152 = prove (
   ``, 
   EVAL_TAC 
   );
-
 
 
 val mac_message_lemma = prove (
