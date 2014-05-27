@@ -922,7 +922,8 @@ val rws =
   [EXEC_STEP_def,LET_THM,ENV_WRAPPER_def,ROUTE_THREE_def,ROUTE_def,
    SIM_def,ADV_WRAPPER_def,DUMMY_ADV_def,PROTO_def,MITB_STEP_def,
    MITB_def,MITB_FUN_def,PROTO_WRAPPER_def,STATE_INVARIANT_def,FMAC_def,
-   STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def]
+   STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def
+                                        ]
 
 fun PairCases_on_tm tm (g as (asl,w)) =
 let
@@ -986,14 +987,23 @@ val put_in_ready_state_lemma = prove (
     fsrw_tac [ARITH_ss] [LET_THM]
     );
 
+
 val PROCESS_MESSAGE_LIST_def= Define
 `
-  (PROCESS_MESSAGE_LIST  [] = [])
+  (PROCESS_MESSAGE_LIST  [] =
+  ([(F,F,0w,0)]:'r mitb_inp list))
   /\
   (PROCESS_MESSAGE_LIST (hd::tl) =
-      ( (F,F,(BITS_TO_WORD hd),(LENGTH hd)))::
-      (PROCESS_MESSAGE_LIST tl)
-  )`;
+      if (LENGTH hd) = dimindex(:'r)-1 then
+        ([(F,F,(BITS_TO_WORD hd),(LENGTH hd));
+        (F,F,0w,0)])
+      else
+        (if (LENGTH hd) <  dimindex(:'r)-1 then
+          [ (F,F,(BITS_TO_WORD hd),(LENGTH hd)) ]
+        else 
+          ((F,F,(BITS_TO_WORD hd),(LENGTH hd))
+           :: (PROCESS_MESSAGE_LIST tl))))
+  `;
 
 val word_bit_word_from_bin_list = store_thm("word_bit_word_from_bin_list",
   ``∀ls b.
@@ -1039,7 +1049,9 @@ val int_min_lemma = prove (
   simp[word_bit_BITS_TO_WORD] >>
   simp[word_bit_def,word_L,Abbr`ls`] >>
   rev_full_simp_tac(srw_ss()++ARITH_ss)[] >>
-  Cases_on`x = dimindex(:'n)-1`>>fs[]>>simp[EL_APPEND1,EL_APPEND2] >>
+  Cases_on`x = dimindex(:'n)-1`>>
+  fs[]>>
+  simp[EL_APPEND1,EL_APPEND2] >>
   simp[EL_ZEROS]);
 
 val int_min_lemma_1152 = prove (
@@ -1051,21 +1063,30 @@ val int_min_lemma_1152 = prove (
   );
 
 
+
+val rws_macking =
+  [
+  LET_THM,
+  MITB_STEP_def, MITB_def,MITB_FUN_def,RunMITB_def,
+  PROCESS_MESSAGE_LIST_def, (Once SplitMessage_def)
+                                        ]
+
 val mac_message_lemma = prove (
-``! r m .
+``! r m pmem . 
    (
    (r = dimindex(:'r))
+   /\
+   (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
    /\
    (((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) =
         RunMITB 
           (MITB_STEP: ('c,'n,'r)mitbstepfunction  f)
-          (Ready,pmem,vmem)
-        ((T,b,inp,len)
-         :: (PROCESS_MESSAGE_LIST
-              (SplitMessage (dimindex(:'r)) m))
-        )))
+          (Absorbing,pmem,pmem)
+         (PROCESS_MESSAGE_LIST
+              (SplitMessage (dimindex(:'r)) m)))
+        )
     ==>
-    (( cntl'=Ready)
+    (( cntl_t=Ready)
     /\
     ( pmem_t = pmem )
     /\
@@ -1075,9 +1096,75 @@ val mac_message_lemma = prove (
             )
     ``,
    recInduct(fetch "-" "SplitMessage_ind") >> 
-    rw [SplitMessage_def, DROP_def] >>
+   strip_tac >> strip_tac >>
+   Cases_on `(LENGTH msg) <= dimindex(:'r)` 
+   >-
+   (
+   rw [GoodParameters_def,(Once SplitMessage_def)] >>
+   `SplitMessage (dimindex(:'r)) msg = [msg]`
+      by (rw [(Once SplitMessage_def)]) >>
+    Cases_on `LENGTH msg = dimindex(:'r)` >>
+    Cases_on `LENGTH msg = dimindex(:'r) - 1` >>
+    rw rws_macking >>
+    lfs [] >>
+    fs rws_macking >>
+    `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >>
+    TRY (`LENGTH msg <= dimindex(:'r)-2` by decide_tac ) >>
+    lfs (rws @ rws_macking) >>
+    (* vmem cases .. will need external lemma *)
     cheat
+    )
+  >>
+   qpat_abbrev_tac `R= dimindex(:'r) ` >> 
+   rw [GoodParameters_def] >>
+   `R <> 0` by DECIDE_TAC >> 
+   POP_ASSUM (fn tm => fs [tm]) >> 
+   rfs [] >>
+   (* qpat_assum `~(LENGTH msg <= R)` (fn thm => fs [thm]) >> *) 
+   (* lfs >> *) 
+   cheat
+
+   (* worked quite well *)
+   (* fs [(Once SplitMessage_def) ] >> *) 
+   (* lfs rws_macking >> *) 
+   (* lfs [] >> *)
+   (* rfs [] >> *)
+   (*  lfs [PROCESS_MESSAGE_LIST_def, (Once SplitMessage_def)]  >> *)
+   (* `~(R=0)` by simp []  >> *)
+   (*  fs [] >> *)
+
+   (*  `(LENGTH (TAKE (dimindex(:'r)) msg)) = (dimindex (:'r))` *) 
+   (*    by  first_assum (mp_tac o MATCH_MP listTheory.LENGTH_TAKE) *)
+   (*    simp [] *)
+
     );
+
+(* We want to show this thing actually *) 
+(* TODO use prev. lemma to  show this *) 
+(* `! r m . *)
+(*    ( *)
+(*    (r = dimindex(:'r)) *)
+(*    /\ *)
+(*    (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n))) *)
+(*    /\ *)
+(*    (((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) = *)
+(*         RunMITB *) 
+(*           (MITB_STEP: ('c,'n,'r)mitbstepfunction  f) *)
+(*           (Ready,pmem,vmem) *)
+(*         ((F,T,inp,len) *)
+(*          :: (PROCESS_MESSAGE_LIST *)
+(*               (SplitMessage (dimindex(:'r)) m)) *)
+(*         ))) *)
+(*     ==> *)
+(*     (( cntl_t=Ready) *)
+(*     /\ *)
+(*     ( pmem_t = pmem ) *)
+(*     /\ *)
+(*     ( vmem_t = BITS_TO_WORD (Hash (dimindex(:'r), dimindex(:'c), dimindex(:'n)) *)
+(*             (WORD_TO_BITS o (f o BITS_TO_WORD )) *)
+(*             ( ZEROS (dimindex(:'r) + dimindex(:'c))) m)) *)
+(*             ) *)
+(*     ` *)
 
 
 
