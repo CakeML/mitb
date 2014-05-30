@@ -14,7 +14,7 @@ Description of MITB state:
 
  permanent: 1600-bit requester storing the Keccak-f permution of an
             initial 1152-bit key padded with 448 zeros. In the HOL
-            notation defined below: f(K++(ZEROS 448))
+            notation defined below: f(K++(Zeros 448))
 
  volatile:  1600-bit register storing MITB state
 
@@ -28,9 +28,9 @@ The initial manufacturer state:
 
  - the permanent memory contains the Keccak-f permution of an initial
    manufacturer-supplied 1152-bit key padded with 448 zeros. In the
-   HOL notation defined below: f(K++(ZEROS 448));
+   HOL notation defined below: f(K++(Zeros 448));
 
- - the volatile memory contains 1600-bit 0 (ZEROS 1600);
+ - the volatile memory contains 1600-bit 0 (Zeros 1600);
 
 Commands (inputs from user/attacker):
  
@@ -42,7 +42,7 @@ Commands (inputs from user/attacker):
    In Absorbing: abandon absorbing, set vmem to zeros.
 
  - Input bits len : {Ready->Ready} + {Absorbing->{Absorbing,AbsorbEnd,Ready}}.
-   In Ready installs f(key++(ZEROS c)) in permanent memory.  
+   In Ready installs f(key++(Zeros c)) in permanent memory.  
    In Absorbing inputs a block and continues absorbing if the block
    isn't the last one (indicated by len < r - where r is the bitrate,
    1152 for SHA-3). If the block being input is the last one, then
@@ -222,11 +222,11 @@ val ZERO_def =
   `ZERO = (0w: 'a word) `;
 
 (* ZERO function used on bits *)
-val ZEROS_def =
+val Zeros_def =
  Define
-  `(ZEROS 0 = [])
+  `(Zeros 0 = [])
    /\
-   (ZEROS(SUC n) = F :: ZEROS n)`;
+   (Zeros(SUC n) = F :: Zeros n)`;
 
 (*
 Defines one step of MITB (r,c,n) with permutation function f
@@ -270,7 +270,7 @@ val MITB_FUN_def =
           *
           * We compute:
         (*   (vmem XOR 
-        *   (TAKE len blk ++ [T] ++ ZEROS(r-len-2) ++ [T] ++ ZEROS c)) *)
+        *   (TAKE len blk ++ [T] ++ Zeros(r-len-2) ++ [T] ++ Zeros c)) *)
         by
         1. rightshifting r-len times (removing the r-len least
         siginificant bits)
@@ -304,7 +304,7 @@ val MITB_FUN_def =
           (0x1w))
           @@ (ZERO:'c word) (*4*)
         ))
-        (* f(vmem XOR (TAKE len blk ++ [T] ++ ZEROS c)))  *)
+        (* f(vmem XOR (TAKE len blk ++ [T] ++ Zeros c)))  *)
        else  (* Full block *)
       (Absorbing,pmem,f(vmem ?? (blk @@ (ZERO: 'c word)))) 
       )
@@ -317,23 +317,10 @@ val MITB_FUN_def =
    (MITB_FUN  f (AbsorbEnd,pmem,vmem) (Input blk len)
     = (Ready, pmem,
     (* see above
-     * f(vmem XOR (ZEROS(r-1) ++ [T] ++ ZEROS c)))) *)
+     * f(vmem XOR (Zeros(r-1) ++ [T] ++ Zeros c)))) *)
      f(vmem ?? ( (0x1w: 'r word) @@ (ZERO: 'c word) ))
      ))
     `;
-
-(*
-Split a message into blocks of a given length
-*)
-val SplitMessage_def =
- tDefine
-  "SplitMessage"
-  `SplitMessage r msg = 
-    if (r = 0) \/ LENGTH msg <= r 
-     then [msg]
-     else TAKE r msg :: SplitMessage r (DROP r msg)`
-  (WF_REL_TAC `measure (LENGTH o SND)`
-    THEN RW_TAC list_ss [LENGTH_DROP]);
 
 (*
 Predicate to test for well-formed Keccak parameters
@@ -406,22 +393,6 @@ val _ =
             CorruptACK 
           | OracleQuery of bits
           `;
-
-(*  TODO Dummy function. Get rid of this later *)
-val WORD_TO_BITS_def=
-  Define
-  ` WORD_TO_BITS (w:'l word) =
-  let 
-    bitstring_without_zeros =  MAP (\e.if e=1 then T else F) (word_to_bin_list w)
-  in
-    ( ZEROS (dimindex(:'l) - (LENGTH bitstring_without_zeros) )) ++
-    bitstring_without_zeros`;
-
-val BITS_TO_WORD_def=
-  Define
-  ` BITS_TO_WORD = 
-      word_from_bin_list o ( MAP (\e.if e=T then 1 else 0))`;
-
 
 (* val b2w_xor_lemma = prove ( *)
 (* `` *)
@@ -558,7 +529,7 @@ val PROTO_def =
                       let (sl,rdyl,dgl) = mitbf (si,(F,F,(ZERO: 'r word), 0)) in
                         sl
                     else si
-                  ) sr (SplitMessage (dimindex(:'r)) m) in
+                  ) sr (Split (dimindex(:'r)) m) in
                 (* let sf = AUX_FEED_MITB mitbf sr m in  *)
                   (* learn digest by skipping *)
                   let (s1,rdy1,digest) = mitbf (sf,(T,F, (ZERO: 'r word),0)) in 
@@ -606,18 +577,18 @@ val PROTO_def =
 
 (* Sanity test *)
 (* RESTR_EVAL_CONV not found... where does it belong too? *)
-(* val RUN = RESTR_EVAL_CONV [``ZEROS``]; *)
+(* val RUN = RESTR_EVAL_CONV [``Zeros``]; *)
 
 (*
 RUN ``EXEC_LIST (PROTO (MITB_STEP (r,c,n) (\m.m)) (r,c,n))
      DUMMY_ADV  
-   (((Ready,(ZEROS (r+c)),(ZEROS (r+c))),F),[]) [(Env_toA (T,F,(ZEROS (r)),0))]
+   (((Ready,(Zeros (r+c)),(Zeros (r+c))),F),[]) [(Env_toA (T,F,(Zeros (r)),0))]
   ``;
 
 RUN ``EXEC_LIST (PROTO (MITB_STEP (r,c,n) (\m.m)) (r,c,n))
      DUMMY_ADV  
-   (((Ready,(ZEROS (r+c)),(ZEROS (r+c))),F),[]) 
-   [(Env_toA (T,F,(ZEROS (r)),0));
+   (((Ready,(Zeros (r+c)),(Zeros (r+c))),F),[]) 
+   [(Env_toA (T,F,(Zeros (r)),0));
    (Env_toP (SetKey (ZEROES (r)))) ]
   ``;
 *)
@@ -710,16 +681,16 @@ val SIM_def =
 RUN ``EXEC_LIST 
      (FMAC (10,c,n) hash)
      (SIM (10,c,n))
-     (((ZEROS (10+c)),F),(F,Ready,(ZEROS r),[])) 
+     (((Zeros (10+c)),F),(F,Ready,(Zeros r),[])) 
      [
-     (Env_toA (T,F,(ZEROS (10)),0));
-     (Env_toP (Mac (ZEROS 20)));
+     (Env_toA (T,F,(Zeros (10)),0));
+     (Env_toP (Mac (Zeros 20)));
      (Env_toP (Corrupt)); 
-     (Env_toP (Mac (ZEROS 20)));
-     (Env_toA (T,F,(ZEROS (10)),0));
-     (Env_toA (F,T,(ZEROS (10)),0));
-     (Env_toA (F,F,(ZEROS (10)),3));
-     (Env_toA (T,F,(ZEROS (10)),0))
+     (Env_toP (Mac (Zeros 20)));
+     (Env_toA (T,F,(Zeros (10)),0));
+     (Env_toA (F,T,(Zeros (10)),0));
+     (Env_toA (F,F,(Zeros (10)),3));
+     (Env_toA (T,F,(Zeros (10)),0))
     ]
   ``;
 
@@ -727,16 +698,16 @@ RUN ``EXEC_LIST
 RUN `` EXEC_LIST 
      (PROTO (MITB_STEP (10,c,n) f) (10,c,n))
      DUMMY_ADV
-     (((Ready,(ZEROS (10+c)),(ZEROS (10+c))),F),[]) 
+     (((Ready,(Zeros (10+c)),(Zeros (10+c))),F),[]) 
      [
-     (Env_toA (T,F,(ZEROS (10)),0));
-     (* (Env_toP (Mac (ZEROS 8))) *)
+     (Env_toA (T,F,(Zeros (10)),0));
+     (* (Env_toP (Mac (Zeros 8))) *)
      (Env_toP (Corrupt)); 
-     (Env_toP (Mac (ZEROS 20)));
-     (Env_toA (T,F,(ZEROS (10)),0));
-     (Env_toA (F,T,(ZEROS (10)),0));
-     (Env_toA (F,F,(ZEROS (10)),3));
-     (Env_toA (T,F,(ZEROS (10)),0))
+     (Env_toP (Mac (Zeros 20)));
+     (Env_toA (T,F,(Zeros (10)),0));
+     (Env_toA (F,T,(Zeros (10)),0));
+     (Env_toA (F,F,(Zeros (10)),3));
+     (Env_toA (T,F,(Zeros (10)),0))
     ]
   ``;
 *)
@@ -1025,20 +996,20 @@ val word_bit_BITS_TO_WORD = store_thm("word_bit_BITS_TO_WORD",
   fs[Abbr`l`] >> simp[word_bit_word_from_bin_list] >>
   simp[EL_MAP,Abbr`y`] >> rw[])
 
-val LENGTH_ZEROS = store_thm("LENGTH_ZEROS",
-  ``∀n. LENGTH (ZEROS n) = n``,
-  Induct >> simp[ZEROS_def])
-val _ = export_rewrites["LENGTH_ZEROS"]
+val LENGTH_Zeros = store_thm("LENGTH_Zeros",
+  ``∀n. LENGTH (Zeros n) = n``,
+  Induct >> simp[Zeros_def])
+val _ = export_rewrites["LENGTH_Zeros"]
 
-val EL_ZEROS = store_thm("EL_ZEROS",
-  ``∀n m. m < n ⇒ (EL m (ZEROS n) = F)``,
-  Induct >> simp[ZEROS_def] >> Cases >> simp[] )
+val EL_Zeros = store_thm("EL_Zeros",
+  ``∀n m. m < n ⇒ (EL m (Zeros n) = F)``,
+  Induct >> simp[Zeros_def] >> Cases >> simp[] )
 
 val int_min_lemma = prove (
   ``
   (dimindex(:'n) > 0)
   ==>
-  ((BITS_TO_WORD ((ZEROS (dimindex(:'n)-1))++[T])):'n word
+  ((BITS_TO_WORD ((Zeros (dimindex(:'n)-1))++[T])):'n word
   = INT_MINw)
   ``,
   strip_tac >>
@@ -1052,27 +1023,50 @@ val int_min_lemma = prove (
   Cases_on`x = dimindex(:'n)-1`>>
   fs[]>>
   simp[EL_APPEND1,EL_APPEND2] >>
-  simp[EL_ZEROS]);
-
-val int_min_lemma_1152 = prove (
-  ``
-  ((BITS_TO_WORD ((ZEROS (1152-1))++[T])):1152 word
-  = INT_MINw)
-  ``, 
-  EVAL_TAC 
-  );
-
-
+  simp[EL_Zeros]);
 
 val rws_macking =
   [
   LET_THM,
   MITB_STEP_def, MITB_def,MITB_FUN_def,RunMITB_def,
-  PROCESS_MESSAGE_LIST_def, (Once SplitMessage_def)
+  PROCESS_MESSAGE_LIST_def, (Once Split_def)
                                         ]
 
+val rws_hash =
+  [
+  LET_THM,
+  Hash_def, Output_def, Absorb_def, Splittowords_def,
+  Pad_def, Zeros_def, PadZeros_def,
+  (Once Split_def) ]
+
+val a_b_mod_a_lemma = prove (
+``( 0 < a) ==> ((a + b) MOD a = b MOD a)``,
+rw [] >>
+first_assum (ASSUME_TAC o SYM o (Q.SPECL [`a`,`b`]) o (MATCH_MP
+MOD_PLUS)) >>
+first_assum (ASSUME_TAC o CONJUNCT2 o (MATCH_MP DIVMOD_ID)) >>
+rw []);
+
+val mac_blocklength = prove (
+`
+! vmem : ('r+'c) word msg: bits.
+(LENGTH msg = dimindex (:'r))
+/\
+(dimindex (:'r) >= 2)
+==>
+(f (f (vmem ⊕ BITS_TO_WORD msg @@ ZERO) ⊕
+     (0w ⋙ dimindex (:ς) ≪ dimindex (:ς) ‖
+         1w ≪ (dimindex (:ς) − 1) + 1w) @@ ZERO) 
+= Absorb f vmem (SplittoWords (Pad (dimindex (:ς)) msg))
+)
+`,
+DISCH_TAC  >>
+rw rws_hash >>
+`a - 
+
+
 val mac_message_lemma = prove (
-``! r m pmem . 
+``! r m pmem vmem. 
    (
    (r = dimindex(:'r))
    /\
@@ -1081,28 +1075,27 @@ val mac_message_lemma = prove (
    (((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) =
         RunMITB 
           (MITB_STEP: ('c,'n,'r)mitbstepfunction  f)
-          (Absorbing,pmem,pmem)
+          (Absorbing,pmem,vmem)
          (PROCESS_MESSAGE_LIST
-              (SplitMessage (dimindex(:'r)) m)))
+              (Split (dimindex(:'r)) m)))
         )
     ==>
     (( cntl_t=Ready)
     /\
     ( pmem_t = pmem )
     /\
-    ( vmem_t = BITS_TO_WORD (Hash (dimindex(:'r), dimindex(:'c), dimindex(:'n))
-            (WORD_TO_BITS o (f o BITS_TO_WORD ))
-            ( ZEROS (dimindex(:'r) + dimindex(:'c))) m))
-            )
+    ( vmem_t = (Absorb f vmem 
+       (SplittoWords (Pad ( dimindex(:'r) ) m))
+       )))
     ``,
-   recInduct(fetch "-" "SplitMessage_ind") >> 
+   recInduct(Split_ind) >> 
    strip_tac >> strip_tac >>
    Cases_on `(LENGTH msg) <= dimindex(:'r)` 
    >-
    (
-   rw [GoodParameters_def,(Once SplitMessage_def)] >>
-   `SplitMessage (dimindex(:'r)) msg = [msg]`
-      by (rw [(Once SplitMessage_def)]) >>
+   rw [GoodParameters_def,(Once Split_def)] >>
+   `Split (dimindex(:'r)) msg = [msg]`
+      by (rw [(Once Split_def)]) >>
     Cases_on `LENGTH msg = dimindex(:'r)` >>
     Cases_on `LENGTH msg = dimindex(:'r) - 1` >>
     rw rws_macking >>
@@ -1112,6 +1105,21 @@ val mac_message_lemma = prove (
     TRY (`LENGTH msg <= dimindex(:'r)-2` by decide_tac ) >>
     lfs (rws @ rws_macking) >>
     (* vmem cases .. will need external lemma *)
+    fs rws_hash >>
+    lfs [] 
+    (* this helps in one case *)
+    `((dimindex(:'r) - (dimindex(:'r)+2) MOD dimindex(:'r) MOD
+    dimindex(:'r)) = dimindex(:'r) - 2 )` by simp
+    [a_b_mod_a_lemma] >>
+    fs []
+    (* MARK *)
+    (* does not work *)
+    qspec_then `msg:bits` (ASSUME_TAC) TAKE_LENGTH_APPEND
+    (* does not work either *)
+    ASSUME_TAC ( SPEC ``msg:bool list`` TAKE_LENGTH_APPEND)
+    MATCH_MP
+    (* want something like this *)
+    (* last_assum (fn tm => ASSUME_TAC (REWRITE_CONV [tm] TAKE_LENGTH_APPEND) ) *)
     cheat
     )
   >>
@@ -1125,11 +1133,11 @@ val mac_message_lemma = prove (
    cheat
 
    (* worked quite well *)
-   (* fs [(Once SplitMessage_def) ] >> *) 
+   (* fs [(Once Split_def) ] >> *) 
    (* lfs rws_macking >> *) 
    (* lfs [] >> *)
    (* rfs [] >> *)
-   (*  lfs [PROCESS_MESSAGE_LIST_def, (Once SplitMessage_def)]  >> *)
+   (*  lfs [PROCESS_MESSAGE_LIST_def, (Once Split_def)]  >> *)
    (* `~(R=0)` by simp []  >> *)
    (*  fs [] >> *)
 
@@ -1153,7 +1161,7 @@ val mac_message_lemma = prove (
 (*           (Ready,pmem,vmem) *)
 (*         ((F,T,inp,len) *)
 (*          :: (PROCESS_MESSAGE_LIST *)
-(*               (SplitMessage (dimindex(:'r)) m)) *)
+(*               (Split (dimindex(:'r)) m)) *)
 (*         ))) *)
 (*     ==> *)
 (*     (( cntl_t=Ready) *)
@@ -1162,7 +1170,7 @@ val mac_message_lemma = prove (
 (*     /\ *)
 (*     ( vmem_t = BITS_TO_WORD (Hash (dimindex(:'r), dimindex(:'c), dimindex(:'n)) *)
 (*             (WORD_TO_BITS o (f o BITS_TO_WORD )) *)
-(*             ( ZEROS (dimindex(:'r) + dimindex(:'c))) m)) *)
+(*             ( Zeros (dimindex(:'r) + dimindex(:'c))) m)) *)
 (*             ) *)
 (*     ` *)
 
