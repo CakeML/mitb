@@ -96,7 +96,7 @@ val WORD_TO_BITS_def=
 val BITS_TO_WORD_def=
   Define
   ` BITS_TO_WORD = 
-      word_from_bin_list o ( MAP (\e.if e=T then 1 else 0))`;
+      word_from_bin_list o ( MAP (\e.if e then 1 else 0))`;
 
 
 
@@ -722,7 +722,7 @@ val Output_def =
   `Output: ('b) word -> 'n word s =
      ((dimindex(:'b)-1) >< (dimindex(:'b)-dimindex(:'n))) s`;
 
-val Split_words_def = 
+val SplittoWords_def = 
   Define
   `SplittoWords: bits -> 'r word list =
     (MAP BITS_TO_WORD) o (Split (dimindex(:'r)))`;

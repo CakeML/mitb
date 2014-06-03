@@ -113,6 +113,7 @@ open Arith;
 open numLib;
 open computeLib;
 open wordsTheory;
+open wordsLib;
 open UCcomTheory;
 open spongeTheory;
 open lcsymtacs;
@@ -1025,6 +1026,159 @@ val int_min_lemma = prove (
   simp[EL_APPEND1,EL_APPEND2] >>
   simp[EL_Zeros]);
 
+
+val word_bit_concat1 = prove(
+``
+((FINITE 𝕌(:α)) ∧ (FINITE 𝕌(:β)) /\
+(x < (dimindex(:'a) + dimindex(:'b)) /\  ~(x < dimindex(:'b) )  ))
+==>
+((word_bit x ( word_join (a:'a word) (b:'b word)))
+= word_bit (x-dimindex(:'b)) a
+)
+``,
+strip_tac >>
+`x < dimindex(:('a+'b))` by fs [fcpTheory.index_sum]  >>
+`(x -dimindex(:'b)) < dimindex(:'a)` by fsrw_tac [ARITH_ss] [] >>
+rw [GSYM word_bit] >>
+lrw [word_join_index] 
+);
+
+val word_bit_concat2 = prove(
+``
+((FINITE 𝕌(:α)) ∧ (FINITE 𝕌(:β)) /\
+(x < dimindex(:'b)))
+==>
+((word_bit x ( word_join (a:'a word) (b:'b word)))
+= word_bit x b
+)
+``,
+strip_tac >>
+`x < dimindex(:'a) + dimindex(:'b)` by fsrw_tac [ARITH_ss] [] >>
+`x < dimindex(:('a+'b))` by pop_assum (fn tm =>  fs
+[fcpTheory.index_sum,tm])  >>
+rw [GSYM word_bit] >>
+rw [word_join_index] 
+);
+
+val BITS_TO_WORD_join = prove (
+``
+  (dimindex(:'a) = (LENGTH  a))
+  /\
+  (dimindex(:'b) = (LENGTH  b))
+  ==> 
+ ((BITS_TO_WORD (b++a)):('a+'b) word = 
+   (word_join ((BITS_TO_WORD a):'a word) ((BITS_TO_WORD b):'b word)))
+``,
+  simp[GSYM WORD_EQ] >>
+  rw [] >>
+  Cases_on `x<dimindex(:'b)` >> 
+  (* TODO Have to find out what this means and then get rid of the cheat *)
+  `(FINITE 𝕌(:α)) ∧ (FINITE 𝕌(:β))` by cheat  >>
+  fs [fcpTheory.index_sum] >> 
+  rfs [] >>
+  rw [word_bit_concat1, word_bit_concat2 ] >> 
+  rw [ADD_COMM, word_bit_BITS_TO_WORD,EL_APPEND1,EL_APPEND2] >> 
+  rw [fcpTheory.index_sum] >> 
+  `x - (LENGTH b) < LENGTH a` by simp [] >>
+  simp [ word_bit_BITS_TO_WORD,EL_APPEND1,EL_APPEND2] 
+);
+
+
+
+(* val BITS_TO_WORD_concat = prove ( *)
+(* `` *)
+(*   (dimindex(:'a) = (LENGTH  a)) *)
+(*   /\ *)
+(*   (dimindex(:'b) = (LENGTH  b)) *)
+(*   /\ *)
+(*   (dimindex(:'c) = (LENGTH  a)+(LENGTH  b)) *)
+(*   ==> *) 
+(*  ((BITS_TO_WORD (b++a)):('c) word = *) 
+(*    ((BITS_TO_WORD a):'a word)@@ ((BITS_TO_WORD b):'b word)) *)
+(* ``, *)
+(*   simp[GSYM WORD_EQ] >> *)
+(*   rw [] >> *)
+(*   Cases_on `x<dimindex(:'b)` >> *) 
+(*   `(FINITE 𝕌(:α)) ∧ (FINITE 𝕌(:β))` by cheat  >> *)
+(*   fs [fcpTheory.index_sum] >> *) 
+(*   rfs [word_concat_def ] >> *)
+(*   rw [WORD_w2w_EXTRACT, fcpTheory.index_sum ] *) 
+(*   (1* PUH *1) *)
+(*   rw [word_bit_concat1, word_bit_concat2 ] >> *) 
+(*   rw [ADD_COMM, word_bit_BITS_TO_WORD,EL_APPEND1,EL_APPEND2] >> *) 
+(*   (1* PUH *1) *)
+(*   rw [ INST_TYPE [gamma |-> Type `:('a+'b) word`] word_concat_def] >> *)
+(*   rw [BITS_TO_WORD_join] >> *) 
+(* ); *)
+
+
+val word_bit_or  = prove (
+`` (x < dimindex(:'a)) ==>
+((a:'a word || b) ' x = a ' x \/ b ' x) ``,
+rw [word_or_def] >>
+simp [fcpTheory.FCP_BETA] 
+);
+
+val word_bit_T  = prove (
+`` 
+(b < dimindex(:'a) ) ==>
+((01w:'a word) ' b = (b=0))``,
+rw [word_index] 
+);
+
+val padding_block_full = prove (
+``
+(dimindex(:'r)>1)
+==>
+(( BITS_TO_WORD ( T::( Zeros (dimindex(:'r)-1) ++ [T] ))): ('r+1) word
+ = (INT_MINw || 1w):('r+1) word 
+ )
+``,
+strip_tac >>
+qmatch_abbrev_tac`( BITS_TO_WORD (T::rest))  = w` >>
+`LENGTH [T]=1` by rw[] >>
+`LENGTH rest=dimindex(:'r)` by simp[Abbr `rest`] >>
+simp_tac pure_ss [Once (CONS_APPEND)] >> 
+rw [BITS_TO_WORD_join] >>
+`dimindex(:'r) > 0 ` by simp [] >> 
+POP_ASSUM (fn thm => rw [Abbr `rest`, int_min_lemma, thm] ) >>
+rw [BITS_TO_WORD_def]  >> 
+simp[GSYM WORD_EQ, GSYM word_bit] >>
+strip_tac >>
+  `FINITE 𝕌(:'r+1) ` by cheat  >>
+  `FINITE 𝕌(:'r) ` by cheat  >>
+`dimindex(:'r+1) = dimindex(:'r) + 1 ` by fs [fcpTheory.index_sum] >> 
+DISCH_TAC >> 
+rw [word_join_index, word_L ]  >>
+qunabbrev_tac `w` >>
+qpat_assum `x < dimindex(:'r+1)` 
+  (fn thm => ( assume_tac (MATCH_MP word_L thm))
+   >> assume_tac thm) >>
+rw [word_bit_or]  
+>- (* x=0 *)
+(
+  `x=0` by simp []  >>
+  rw [word_bit_T]
+)
+>>
+ `x < dimindex(:'r+1)` by simp [] >>
+  rw [word_bit_T] >>
+ `x-1 < dimindex(:'r)` by simp [] >>
+  rw [word_L] >>
+  simp [] 
+);
+
+(* val alt_padding = prove ( *)
+(* `` *)
+(* (dimindex(:'r)>2) *)
+(* ==> *)
+(* (( BITS_TO_WORD (m ++ (T::( Zeros (dimindex(:'r)-2 - (LENGTH m)) ++ [T] )))): ('r) word *)
+(*  = (INT_MINw || 1w):('r+1) word *) 
+(*  ) *)
+(* ``, *)
+
+
+
 val rws_macking =
   [
   LET_THM,
@@ -1035,7 +1189,7 @@ val rws_macking =
 val rws_hash =
   [
   LET_THM,
-  Hash_def, Output_def, Absorb_def, Splittowords_def,
+  Hash_def, Output_def, Absorb_def, SplittoWords_def,
   Pad_def, Zeros_def, PadZeros_def,
   (Once Split_def) ]
 
@@ -1047,22 +1201,6 @@ MOD_PLUS)) >>
 first_assum (ASSUME_TAC o CONJUNCT2 o (MATCH_MP DIVMOD_ID)) >>
 rw []);
 
-val mac_blocklength = prove (
-`
-! vmem : ('r+'c) word msg: bits.
-(LENGTH msg = dimindex (:'r))
-/\
-(dimindex (:'r) >= 2)
-==>
-(f (f (vmem ⊕ BITS_TO_WORD msg @@ ZERO) ⊕
-     (0w ⋙ dimindex (:ς) ≪ dimindex (:ς) ‖
-         1w ≪ (dimindex (:ς) − 1) + 1w) @@ ZERO) 
-= Absorb f vmem (SplittoWords (Pad (dimindex (:ς)) msg))
-)
-`,
-DISCH_TAC  >>
-rw rws_hash >>
-`a - 
 
 
 val mac_message_lemma = prove (
@@ -1093,8 +1231,8 @@ val mac_message_lemma = prove (
    Cases_on `(LENGTH msg) <= dimindex(:'r)` 
    >-
    (
-   rw [GoodParameters_def,(Once Split_def)] >>
-   `Split (dimindex(:'r)) msg = [msg]`
+    rw [GoodParameters_def,(Once Split_def)] >>
+    `Split (dimindex(:'r)) msg = [msg]`
       by (rw [(Once Split_def)]) >>
     Cases_on `LENGTH msg = dimindex(:'r)` >>
     Cases_on `LENGTH msg = dimindex(:'r) - 1` >>
@@ -1107,19 +1245,22 @@ val mac_message_lemma = prove (
     (* vmem cases .. will need external lemma *)
     fs rws_hash >>
     lfs [] 
-    (* this helps in one case *)
-    `((dimindex(:'r) - (dimindex(:'r)+2) MOD dimindex(:'r) MOD
-    dimindex(:'r)) = dimindex(:'r) - 2 )` by simp
-    [a_b_mod_a_lemma] >>
-    fs []
-    (* MARK *)
-    (* does not work *)
-    qspec_then `msg:bits` (ASSUME_TAC) TAKE_LENGTH_APPEND
-    (* does not work either *)
-    ASSUME_TAC ( SPEC ``msg:bool list`` TAKE_LENGTH_APPEND)
-    MATCH_MP
-    (* want something like this *)
-    (* last_assum (fn tm => ASSUME_TAC (REWRITE_CONV [tm] TAKE_LENGTH_APPEND) ) *)
+    >- (* LENGTH msg = dimindex(:'r) *)
+    (
+      `((dimindex(:'r) - (dimindex(:'r)+2) MOD dimindex(:'r) MOD
+      dimindex(:'r)) = dimindex(:'r) - 2 )` by simp
+      [a_b_mod_a_lemma] >>
+      fs [] >>
+      Q.ISPEC_THEN `msg:bits` (ASSUME_TAC) TAKE_LENGTH_APPEND >>
+      Q.ISPEC_THEN `msg:bits` (ASSUME_TAC) DROP_LENGTH_APPEND >>
+      qpat_assum `LENGTH msg = X` (fn tm => fs [tm] >> assume_tac tm ) >> 
+      asm_simp_tac std_ss [GSYM APPEND_ASSOC]  >>
+      rw [Once (Split_def),LengthZeros,padding_block_full] >>
+      lfs [] >>
+      (* CURRENT POS *)
+      cheat
+    )
+    >>
     cheat
     )
   >>
@@ -1131,7 +1272,6 @@ val mac_message_lemma = prove (
    (* qpat_assum `~(LENGTH msg <= R)` (fn thm => fs [thm]) >> *) 
    (* lfs >> *) 
    cheat
-
    (* worked quite well *)
    (* fs [(Once Split_def) ] >> *) 
    (* lfs rws_macking >> *) 
@@ -1140,11 +1280,10 @@ val mac_message_lemma = prove (
    (*  lfs [PROCESS_MESSAGE_LIST_def, (Once Split_def)]  >> *)
    (* `~(R=0)` by simp []  >> *)
    (*  fs [] >> *)
-
+   (* ------------------------------- *)
    (*  `(LENGTH (TAKE (dimindex(:'r)) msg)) = (dimindex (:'r))` *) 
    (*    by  first_assum (mp_tac o MATCH_MP listTheory.LENGTH_TAKE) *)
    (*    simp [] *)
-
     );
 
 (* We want to show this thing actually *) 
