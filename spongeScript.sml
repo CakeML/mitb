@@ -49,6 +49,8 @@ open HolKernel Parse boolLib bossLib
      arithmeticTheory Arith numLib computeLib
      wordsLib
      Cooper;
+open lcsymtacs;
+open wordsTheory;
 
 val _ = intLib.deprecate_int();
 
@@ -97,8 +99,6 @@ val BITS_TO_WORD_def=
   Define
   ` BITS_TO_WORD = 
       word_from_bin_list o ( MAP (\e.if e then 1 else 0))`;
-
-
 
 (*
 Sanity checks
@@ -691,6 +691,19 @@ EVAL ``Split 4 (Pad 4 [m0;m1;m2;m3;m4;m5;m6;m7;m8;m9;m10;m11;m12])``;
 EVAL ``Split 4 (Pad 4 [m0;m1;m2;m3;m4;m5;m6;m7;m8;m9;m10;m11;m12;m13])``;
 *)
 
+val Split_APPEND =
+  store_thm
+  ("Split_APPEND",
+  ``!l1 l2.
+  ( 0< LENGTH l1 )
+  ==>
+  ( 0< LENGTH l2 )
+  ==>
+   (Split (LENGTH l1) (l1 ++ l2) = l1::(Split (LENGTH l1) l2))
+  ``,
+    RW_TAC list_ss [( Once Split_def ),TAKE_LENGTH_APPEND,
+                        DROP_LENGTH_APPEND]
+    );
 
 (*
 Absorb f c : state -> block list -> state
@@ -724,8 +737,8 @@ val Output_def =
 
 val SplittoWords_def = 
   Define
-  `SplittoWords: bits -> 'r word list =
-    (MAP BITS_TO_WORD) o (Split (dimindex(:'r)))`;
+  `(SplittoWords: bits -> 'r word list) bitlist  =
+    (MAP BITS_TO_WORD) (Split (dimindex(:'r)) bitlist)`;
 
 (*
 Hash a message
