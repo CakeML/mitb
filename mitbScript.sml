@@ -997,10 +997,15 @@ end g
 
 (* 
 The following two lemmas are used in the (uncomplete) proof for the
-Invariant_cor and Invariant_cntl below, but will substituted by
-mitb_skip_lemma, which is stronger 
+Invariant_cor and Invariant_cntl below, but will substituted by a
+stronger lemma derived from put_in_ready_state_lemma, mac_message_lemma
+and
 
-TODO: delete when mitb_skip_lemma lemma is shown.
+TODO: When mitb_skip_lemma lemma is shown, reformulate PROTO so it
+uses PROCESS_MESSAGE_LIST (defined below) and then strengthen lemma so
+it defines vmem.
+lemma_proto_mac_cor_one_andahalf and lemma_proto_mac_cor_two are then
+obsolete.
 *) 
 
 val lemma_proto_mac_cor_one_andahalf = prove (
@@ -1059,6 +1064,10 @@ fs [RunMITB_def, MITB_STEP_def, MITB_FUN_def, MITB_def] >>
 fsrw_tac [ARITH_ss] [LET_THM]
 );
 
+(*
+A certain chain of commands can be used to put the MITB into ready
+state.
+*)
 val put_in_ready_state_lemma = prove (
 ``
     (
@@ -1088,7 +1097,14 @@ val put_in_ready_state_lemma = prove (
     fsrw_tac [ARITH_ss] [LET_THM]
     );
 
+(* 
+PROCESS_MESSAGE_LIST: bits list -> 'r mitb_inp list
+Given a list of bitstrings, PROCESS_MESSAGE_LIST produces a list of
+input queries to the MITB that will leave the MITB in ready state, with
+vmem set to the hash of the flattening of the input.
 
+PROCESS_MESSAGE_LIST will be used in a re-definition of the protocol.
+*)
 val PROCESS_MESSAGE_LIST_def= Define
 `
   (PROCESS_MESSAGE_LIST  [] =
@@ -1107,143 +1123,7 @@ val PROCESS_MESSAGE_LIST_def= Define
   `;
 
 
-
-val word_bit_concat1 = prove(
-``
-((FINITE 𝕌(:α)) ∧ (FINITE 𝕌(:β)) /\
-(x < (dimindex(:'a) + dimindex(:'b)) /\  ~(x < dimindex(:'b) )  ))
-==>
-((word_bit x ( word_join (a:'a word) (b:'b word)))
-= word_bit (x-dimindex(:'b)) a
-)
-``,
-strip_tac >>
-`x < dimindex(:('a+'b))` by fs [fcpTheory.index_sum]  >>
-`(x -dimindex(:'b)) < dimindex(:'a)` by fsrw_tac [ARITH_ss] [] >>
-rw [GSYM word_bit] >>
-lrw [word_join_index] 
-);
-
-val word_bit_concat2 = prove(
-``
-((FINITE 𝕌(:α)) ∧ (FINITE 𝕌(:β)) /\
-(x < dimindex(:'b)))
-==>
-((word_bit x ( word_join (a:'a word) (b:'b word)))
-= word_bit x b
-)
-``,
-strip_tac >>
-`x < dimindex(:'a) + dimindex(:'b)` by fsrw_tac [ARITH_ss] [] >>
-`x < dimindex(:('a+'b))` by pop_assum (fn tm =>  fs
-[fcpTheory.index_sum,tm])  >>
-rw [GSYM word_bit] >>
-rw [word_join_index] 
-);
-
-val BITS_TO_WORD_join = prove (
-``
-  (dimindex(:'a) = (LENGTH  a))
-  /\
-  (dimindex(:'b) = (LENGTH  b))
-  ==> 
- ((BITS_TO_WORD (b++a)):('a+'b) word = 
-   (word_join ((BITS_TO_WORD a):'a word) ((BITS_TO_WORD b):'b word)))
-``,
-  simp[GSYM WORD_EQ] >>
-  rw [] >>
-  Cases_on `x<dimindex(:'b)` >> 
-  (* TODO Have to find out what this means and then get rid of the cheat *)
-  `(FINITE 𝕌(:α)) ∧ (FINITE 𝕌(:β))` by cheat  >>
-  fs [fcpTheory.index_sum] >> 
-  rfs [] >>
-  rw [word_bit_concat1, word_bit_concat2 ] >> 
-  rw [ADD_COMM, word_bit_BITS_TO_WORD,EL_APPEND1,EL_APPEND2] >> 
-  rw [fcpTheory.index_sum] >> 
-  `x - (LENGTH b) < LENGTH a` by simp [] >>
-  simp [ word_bit_BITS_TO_WORD,EL_APPEND1,EL_APPEND2] 
-);
-
-(* val BITS_TO_WORD_concat = prove ( *)
-(* `` *)
-(*   (dimindex(:'a) = (LENGTH  a)) *)
-(*   /\ *)
-(*   (dimindex(:'b) = (LENGTH  b)) *)
-(*   /\ *)
-(*   (dimindex(:'c) = (LENGTH  a)+(LENGTH  b)) *)
-(*   ==> *) 
-(*  ((BITS_TO_WORD (b++a)):('c) word = *) 
-(*   w2w ( ((BITS_TO_WORD a):'a word) @@ ((BITS_TO_WORD b):'b word))) *)
-(* ``, *)
-(*   simp[GSYM WORD_EQ] >> *)
-(*   rw [] >> *)
-(*   Cases_on `x<dimindex(:'b)` >> *) 
-(*   `(FINITE 𝕌(:α)) ∧ (FINITE 𝕌(:β))` by cheat  >> *)
-(*   fs [fcpTheory.index_sum] >> *) 
-(*   rfs [word_concat_def ] >> *)
-(*   rw [WORD_w2w_EXTRACT, fcpTheory.index_sum ] *) 
-(*   (1* PUH *1) *)
-(*   rw [word_bit_concat1, word_bit_concat2 ] >> *) 
-(*   rw [ADD_COMM, word_bit_BITS_TO_WORD,EL_APPEND1,EL_APPEND2] >> *) 
-(*   (1* PUH *1) *)
-(*   rw [ INST_TYPE [gamma |-> Type `:('a+'b) word`] word_concat_def] >> *)
-(*   rw [BITS_TO_WORD_join] >> *) 
-(* ); *)
-
-
-
-val padding_block_full = prove (
-``
-(dimindex(:'r)>1)
-==>
-(( BITS_TO_WORD ( T::( Zeros (dimindex(:'r)-1) ++ [T] ))): ('r+1) word
- = (INT_MINw || 1w):('r+1) word 
- )
-``,
-strip_tac >>
-qmatch_abbrev_tac`( BITS_TO_WORD (T::rest))  = w` >>
-`LENGTH [T]=1` by rw[] >>
-`LENGTH rest=dimindex(:'r)` by simp[Abbr `rest`] >>
-simp_tac pure_ss [Once (CONS_APPEND)] >> 
-rw [BITS_TO_WORD_join] >>
-`dimindex(:'r) > 0 ` by simp [] >> 
-POP_ASSUM (fn thm => rw [Abbr `rest`, int_min_lemma, thm] ) >>
-rw [BITS_TO_WORD_def]  >> 
-simp[GSYM WORD_EQ, GSYM word_bit] >>
-strip_tac >>
-  `FINITE 𝕌(:'r+1) ` by cheat  >>
-  `FINITE 𝕌(:'r) ` by cheat  >>
-`dimindex(:'r+1) = dimindex(:'r) + 1 ` by fs [fcpTheory.index_sum] >> 
-DISCH_TAC >> 
-rw [word_join_index, word_L ]  >>
-qunabbrev_tac `w` >>
-qpat_assum `x < dimindex(:'r+1)` 
-  (fn thm => ( assume_tac (MATCH_MP word_L thm))
-   >> assume_tac thm) >>
-rw [word_bit_or]  
->- (* x=0 *)
-(
-  `x=0` by simp []  >>
-  rw [word_bit_T]
-)
->>
- `x < dimindex(:'r+1)` by simp [] >>
-  rw [word_bit_T] >>
- `x-1 < dimindex(:'r)` by simp [] >>
-  rw [word_L] >>
-  simp [] 
-);
-
-
-(* val alt_padding = prove ( *)
-(* `` *)
-(* (dimindex(:'r)>2) *)
-(* ==> *)
-(* (( BITS_TO_WORD (m ++ (T::( Zeros (dimindex(:'r)-2 - (LENGTH m)) ++ [T] )))): ('r) word *)
-(*  = (INT_MINw || 1w):('r+1) word *) 
-(*  ) *)
-(* ``, *)
-
+(* This lemma is useful for simplifying terms occuring in the padding *)
 val a_b_mod_a_lemma = prove (
 ``( 0 < a) ==> ((a + b) MOD a = b MOD a)``,
 rw [] >>
@@ -1252,7 +1132,10 @@ MOD_PLUS)) >>
 first_assum (ASSUME_TAC o CONJUNCT2 o (MATCH_MP DIVMOD_ID)) >>
 rw []);
 
-
+(*
+Rewrite system for what concerns the MACing procedure inside the
+protocol
+*)
 val rws_macking =
   [
   LET_THM,
@@ -1260,6 +1143,10 @@ val rws_macking =
   PROCESS_MESSAGE_LIST_def
   ]
 
+(*
+Rewrite system for what concerns the definition of Hash. (Ideal world
+behaviour)
+*)
 val rws_hash =
   [
   LET_THM,
@@ -1267,6 +1154,17 @@ val rws_hash =
   Pad_def, Zeros_def, PadZeros_def,
   a_b_mod_a_lemma
    ]
+(*
+This lemma shows that the MACing step in the protocol is executed
+correctly, i.e., that the virtual memory after execution equals a
+properly computed hash,  given that the MITB was in ready state before
+(which can be established using put_in_ready_state_lemma).
+
+REMARK: During protocol excution, we will be able to establish that
+vmem equals pmem after moving into Absorbing. Thus
+(Absorb f vmem (SplittoWords (Pad ( dimindex(:'r) ) m))) 
+will equal Hash f ..  if composed right.
+*)
 
 val mac_message_lemma = prove (
 ``! r m pmem vmem. 
@@ -1446,9 +1344,10 @@ val mac_message_lemma = prove (
 
 
 
-(* We show that, given that the complete invariant holds, the corruption part of
-* the invariant holds. 
-* *)
+(*
+Given that the complete invariant holds, the corruption part of
+the invariant holds in the next step.
+*)
 val Invariant_cor = prove(
  ``! f h
      (* The MITB's state in the real game *)
@@ -1542,8 +1441,10 @@ val Invariant_cor = prove(
     )
 );
 
-(* We show that, given that the complete invariant holds, the control part of
-                                      * the invariant holds.  *)
+(*
+Given that the complete invariant holds, the control part
+of the invariant holds in the next step.
+*)
 (* Fails currently *)
 val Invariant_cntl = prove(
  `` ! f h
