@@ -213,6 +213,7 @@ val _ =
        -> ('r command) (* command *)
        -> (('c,'r) mitb_state) (* next state *)
       ``);
+
 (*
 Type abbreviation for MITB step-function
 Given a permutation on b=r+c words, a state and an input, gives
@@ -222,8 +223,8 @@ val _ =
  type_abbrev
  (* ('c, 'n,'r) mitbstepfunction is *)
   ("mitbstepfunction",
-  ``:
-  ( ('r+'c) word -> ('r+'c) word)  (* permutation *)
+   ``: 
+   (('r+'c) word -> ('r+'c) word)  (* permutation *)
   -> ('c, 'r) mitb_state # 'r mitb_inp
   -> ('c, 'r) mitb_state # 'n mitb_out
       ``);
