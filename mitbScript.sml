@@ -223,8 +223,7 @@ val _ =
  type_abbrev
  (* ('c, 'n,'r) mitbstepfunction is *)
   ("mitbstepfunction",
-   ``: 
-   (('r+'c) word -> ('r+'c) word)  (* permutation *)
+``: (('r+'c) word -> ('r+'c) word)  (* permutation *)
   -> ('c, 'r) mitb_state # 'r mitb_inp
   -> ('c, 'r) mitb_state # 'n mitb_out
       ``);
@@ -375,7 +374,7 @@ val full_padding_lemma = prove (
 ( 2 < dimindex(:'r))
 ==>
 (
-(BITS_TO_WORD (T::(Zeros (dimindex(:'r)-2))++[T])):'r word
+(BITS_TO_WORD (T::((Zeros (dimindex(:'r)-2))++[T]))):'r word
 =  PAD_WORD (0)
 )
 ``,
@@ -1203,95 +1202,70 @@ val mac_message_lemma = prove (
       by (rw [(Once Split_def)]) >>
     `(dimindex(:'r) = LENGTH msg  )
      \/
-     (dimindex(:'r)-1 = LENGTH msg )
+     (LENGTH msg = dimindex(:'r)-1 )
      \/
      ((0 < LENGTH msg) /\ (LENGTH msg < dimindex(:'r)-1 ))
      \/
      (0 = LENGTH msg )` by simp []
     >- (* LENGTH msg = dimindex(:'r) *)
     (
-      fs rws_macking >>
-      fsrw_tac [ARITH_ss] [] >>
-      fs rws_macking >>
+      fsrw_tac [ARITH_ss] rws_macking >>
       ` ~(dimindex(:'r) <= dimindex(:'r) -2)` by simp [] >>
       pop_assum (fn thm => fsrw_tac[ARITH_ss] [thm]) >>
       fs rws_macking >>
-      rw rws_hash >>
-      lfs [a_b_mod_a_lemma] >>
+      (* now cntl_t, pmem_t and vmem_t are determined *)
+      fsrw_tac [ARITH_ss] (a_b_mod_a_lemma::rws_hash) >>
       `! rest more . ((msg++[T])++ rest) ++ more
        = msg++ ([T]++ rest ++ more)` by rw [] >>
       pop_assum (fn thm => PURE_REWRITE_TAC [thm]) >>
-      qmatch_abbrev_tac
-        `word = Absorb f vmem
-           (MAP BITS_TO_WORD (Split (len) (msg ++
-           rest )))` >>
-      cheat
-      (* this proof should be easy using LengthZeros, but it isn't *)
-      (* `LENGTH(rest)=dimindex(:'r)` by (simp [Abbr`rest`] >> *)
-      (* fs[ LengthZeros ] ) >> *)
-      (* Q.ISPECL_THEN  [`msg`,`rest`] assume_tac  Split_APPEND >> *)
-      (* `0<LENGTH(msg) /\ 0<LENGTH(rest)` by simp [] >> *)
-      (* lfs [] >> ntac 2 (pop_assum (fn thm => ALL_TAC)) >> *)
-      (* pop_assum (fn thm => simp [thm]) >> *)
-      (* qpat_abbrev_tac `bla= (LENGTH msg)` >> *)
-      (* qpat_abbrev_tac `blubb=(msg++rest)` >> *)
-      (* qpat_abbrev_tac `fii=((Split bla) blubb)` >> *)
-      (* (1* WEIRD... this fails ... *1) *)
-      (* simp [ INST_TYPE [alpha |-> Type `:bool `] Split_APPEND] >> *)
-      (* pop_assum (fn thm => PURE_REWRITE_TAC [thm]) >> *)
-
-      (* qpat_abbrev_tac `M=(Split (dimindex(:'r)) msg): bits list` >> *)
-      (* qpat_assum `Split (dimindex(:'r)) msg = X` (fn thm => *)
-      (* (PURE_REWRITE_TAC [thm]>> assume_tac thm)) >> *)
-      (* lrfs [] *)
-      (* fs rws_macking >> *)
-
-      (* `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >> *)
-      (* lfs (rws @ rws_macking @ rws_hash) >> *)
-      (* simp rws_hash >> *)
-
-      (* qpat_abbrev_tac `R=(dimindex(:'r))` >> *)
-      (* qpat_abbrev_tac `Z= ( R - 2)` >> *)
-      (* qpat_abbrev_tac `ZZ= ( - 2)` >> *)
-
-      (* `! rest more . ((msg++[T])++ rest) ++ more *)
-      (*  = msg++ ([T]++ rest ++ more)` by rw [] >> *)
-      (* pop_assum (fn thm => PURE_REWRITE_TAC [thm]) >> *)
-      (* qpat_assum `LENGTH msg = x` *)
-      (*   (fn thm => PURE_REWRITE_TAC [thm,TAKE_LENGTH_APPEND] >> assume_tac thm) *)
-
-
-
-      (* `SplittoWords w = (MAP (BITS_TO_WORD:bits -> 'r word)) (Split *)
-      (* (dimindex(:'r)) w)` by *)
-      (* rw[SplittoWords_def] *)
-      (* simp [SplittoWords_def,GSYM combinTheory.o_THM] *)
-
-    (* from a previous attempt  *)
-    (* >> *)
-    (* `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >> *)
-    (* TRY (`LENGTH msg <= dimindex(:'r)-2` by decide_tac ) >> *)
-    (* lfs (rws @ rws_macking) >> *)
-    (* fs rws_hash >> *)
-    (* lfs [] *)
-    (* >- (1* LENGTH msg = dimindex(:'r) *1) *)
-    (* ( *)
-    (*   `((dimindex(:'r) - (dimindex(:'r)+2) MOD dimindex(:'r) MOD *)
-    (*   dimindex(:'r)) = dimindex(:'r) - 2 )` by simp *)
-    (*   [a_b_mod_a_lemma] >> *)
-    (*   fs [] >> *)
-    (*   Q.ISPEC_THEN `msg:bits` (ASSUME_TAC) TAKE_LENGTH_APPEND >> *)
-    (*   Q.ISPEC_THEN `msg:bits` (ASSUME_TAC) DROP_LENGTH_APPEND >> *)
-    (*   qpat_assum `LENGTH msg = X` (fn tm => fs [tm] >> assume_tac tm ) >> *)
-    (*   asm_simp_tac std_ss [GSYM APPEND_ASSOC]  >> *)
-
-    (*   rw [Once (Split_def),LengthZeros,padding_block_full] >> *)
-    (*   lfs [] >> *)
-    (*   (1* CURRENT POS *1) *)
-    (*   cheat *)
+      qpat_abbrev_tac `zeroblock = ([T] ++ Zeros (LENGTH msg - 2)) ++ [T]` >>
+      `0 < LENGTH (msg)` by simp [] >>
+      `0 < LENGTH (zeroblock)` by simp [LengthZeros,Abbr`zeroblock`] >>
+      RW_TAC arith_ss  [Split_APPEND] >>
+      pop_assum (fn thm => ALL_TAC) >>
+      pop_assum (fn thm => ALL_TAC) >>
+      `LENGTH (zeroblock) = LENGTH msg` by simp [LengthZeros,Abbr`zeroblock`] >>
+      RW_TAC arith_ss  [ (Once Split_def) ] >>
+      rw rws_hash >>
+      qpat_assum `dimindex(:'r) = LENGTH (msg)`
+        (fn thm => assume_tac (SYM thm)) >>
+      simp [Abbr`zeroblock`,full_padding_lemma, ZERO_def ]
     )
-    >>
-    cheat
+    >- (* LENGTH msg = dimindex(:'r)-1 *)
+    (
+      fsrw_tac [ARITH_ss] rws_macking >>
+      ` ~(dimindex(:'r)-1 <= dimindex(:'r) -2)` by simp [] >>
+      pop_assum (fn thm => fsrw_tac[ARITH_ss] [thm]) >>
+      fs rws_macking >>
+      (* now cntl_t, pmem_t and vmem_t are determined *)
+      fsrw_tac [ARITH_ss] (a_b_mod_a_lemma::rws_hash) >>
+      RW_TAC arith_ss  [GSYM APPEND_ASSOC] >>
+      qpat_abbrev_tac `block2 = (Zeros (dimindex(:'r) - 1) ++ [T]) ` >>
+      RW_TAC arith_ss  [APPEND_ASSOC] >>
+      qpat_abbrev_tac `block1 = (msg ++ [T]) ` >>
+      `LENGTH (block1) = dimindex(:'r)` by simp [Abbr`block1`] >>
+      `LENGTH (block2) = dimindex(:'r)` by simp [Abbr`block2`] >>
+      `0 < LENGTH (block1)  /\ 0 < LENGTH (block2) ` by simp [] >>
+      `LENGTH (block2) = dimindex(:'r)` by simp [Abbr`block2`] >>
+      qpat_assum ` LENGTH (block1) =  dimindex(:'r)`
+        (fn thm => assume_tac (SYM thm)) >>
+      `~(LENGTH block1 + LENGTH(block2) <= LENGTH (block1)) ` by simp []
+      >>
+      RW_TAC arith_ss  [Split_APPEND] >>
+      fs [] >>
+      qpat_assum ` LENGTH (block2) = X` (fn thm=>assume_tac (SYM thm)) >>
+      rw (Once (Split_def)::rws_hash) >>
+      rw rws_hash >>
+      pop_assum (fn thm => ALL_TAC) >>
+      pop_assum (fn thm => ALL_TAC) >>
+      qpat_assum `0 < LENGTH (X) ` (fn thm=> ALL_TAC) >>
+      qpat_assum `0 < LENGTH (X) ` (fn thm=> ALL_TAC) >>
+      rw [Abbr`block1`] >>
+      fs [] >>
+      pop_assum (fn thm => `LENGTH(msg)=dimindex(:'r) -1` by rw [thm]  ) >>
+      `2 < dimindex(:'r)` by simp [] >>
+      rw [one_short_lemma, ZERO_def ] >>
+      simp [Abbr`block2`,int_min_lemma]
     )
   >>
    qpat_abbrev_tac `R= dimindex(:'r) ` >>

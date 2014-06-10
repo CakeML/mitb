@@ -713,14 +713,14 @@ val Absorb_def =
   `(Absorb f s ([]:'r word list)  = s)
    /\
    (Absorb f (s: ('r+'c) word) (blk::blkl) =
-     Absorb f (f(s ?? (blk @@ 0w: 'c word))) blkl)`;
+     Absorb f (f(s ?? (0w: 'c word @@ blk ))) blkl)`;
 
 (* Sanity check: relate Absorb to FOLDL *)
 val Absorb_FOLDL =
  store_thm
   ("Absorb_FOLDL",
-   ``Absorb (f: ('r+'c) word -> ('r+'c) word) = FOLDL (\s blk. f(s ?? (blk @@
-   (0w: 'c word))))``,
+   ``Absorb (f: ('r+'c) word -> ('r+'c) word) = FOLDL (\s blk. f(s ?? ((0w: 'c word) @@ blk
+   )))``,
    RW_TAC std_ss [FUN_EQ_THM]
     THEN Q.SPEC_TAC(`x`,`s0`)
     THEN Q.SPEC_TAC(`x'`,`blkl`)
