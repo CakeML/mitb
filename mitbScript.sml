@@ -33,7 +33,7 @@ The initial manufacturer state:
  - the volatile memory contains 1600-bit 0 (Zeros 1600);
 
 Commands (inputs from user/attacker):
- 
+
  - Skip : {Ready -> Ready} + {Absorbing -> Absorbing}
    State unchanged (stutter, no-op).
 
@@ -42,7 +42,7 @@ Commands (inputs from user/attacker):
    In Absorbing: abandon absorbing, set vmem to zeros.
 
  - Input bits len : {Ready->Ready} + {Absorbing->{Absorbing,AbsorbEnd,Ready}}.
-   In Ready installs f(key++(Zeros c)) in permanent memory.  
+   In Ready installs f(key++(Zeros c)) in permanent memory.
    In Absorbing inputs a block and continues absorbing if the block
    isn't the last one (indicated by len < r - where r is the bitrate,
    1152 for SHA-3). If the block being input is the last one, then
@@ -55,7 +55,7 @@ State-transition diagram
                     |           |<-------------->|           |
                 +---|           |                |           |---+
                 |   |           |                |           |   |
- Input key len  |   |  Ready    |                | Absorbing |   | Input blk len 
+ Input key len  |   |  Ready    |                | Absorbing |   | Input blk len
                 |   |           |  Input blk len |           |   |   (len = r)
                 |-->|           |   (len < r-1)  |           |<--|
                     |           |<---------------|           |
@@ -130,7 +130,7 @@ val _ = new_theory "mitb";
 
 val _ = numLib.prefer_num();
 
-(* 
+(*
 Bit sizes:
  digest   (n): 224
  capacity (c): 448
@@ -159,10 +159,10 @@ val _ =
 (*
 Type abbreviation for MITB states
 *)
-val _ = 
+val _ =
   (* ('c,'r) mitb_state is *)
  type_abbrev
-  ("mitb_state", 
+  ("mitb_state",
    ``:control # ('r+'c) word # ('r+'c) word ``);
 (*              permanent       volatile      *)
 
@@ -204,10 +204,10 @@ Type abbreviation for MITB device
 Given a permutation on b=r+c words, moves from one state, via a command
 to another state
 *)
-val _ = 
+val _ =
  type_abbrev
  (* ('c,'r) mitb is *)
-  ("mitb", 
+  ("mitb",
    ``: ( ('r+'c) word -> ('r+'c) word) (* permutation *)
        -> (('c,'r) mitb_state) (* prev. state *)
        -> ('r command) (* command *)
@@ -218,11 +218,11 @@ Type abbreviation for MITB step-function
 Given a permutation on b=r+c words, a state and an input, gives
 following state and the output.
 *)
-val _ = 
+val _ =
  type_abbrev
  (* ('c, 'n,'r) mitbstepfunction is *)
-  ("mitbstepfunction", 
-  ``: 
+  ("mitbstepfunction",
+  ``:
   ( ('r+'c) word -> ('r+'c) word)  (* permutation *)
   -> ('c, 'r) mitb_state # 'r mitb_inp
   -> ('c, 'r) mitb_state # 'n mitb_out
@@ -242,14 +242,14 @@ a padded bitstring into a word to a the translation of the same word
 padded by the MITB.
 *)
 
-(* 
+(*
 Every element in a Zeros-bitstring is F
 *)
 val EL_Zeros = store_thm("EL_Zeros",
   ``∀n m. m < n ⇒ (EL m (Zeros n) = F)``,
   Induct >> simp[Zeros_def] >> Cases >> simp[] )
 
-(* 
+(*
 Make rewrites for Zeros-bitstring easier.
 *)
 val LENGTH_Zeros = store_thm("LENGTH_Zeros",
@@ -257,7 +257,7 @@ val LENGTH_Zeros = store_thm("LENGTH_Zeros",
   Induct >> simp[Zeros_def])
 val _ = export_rewrites["LENGTH_Zeros"]
 
-(* 
+(*
 At every position, the bit in a word constructed using
 word_from_bin_list concides with the value at the same position in the
 original bitstring.
@@ -291,7 +291,7 @@ val word_bit_BITS_TO_WORD = store_thm("word_bit_BITS_TO_WORD",
 (*
 The word we use for padding. It is Zero at each position, except for the
 last-position (MSB) and the position given as a parameter.
-(l >< 0) w || PAD_WORD l 
+(l >< 0) w || PAD_WORD l
 produces a padded word of length l from w and l.
 REMARK: For l=dimindex(:'a), PAD_WORD has only the MSB set to 1, which
 is useful for the definition in case l is one short to the block length.
@@ -318,25 +318,25 @@ PAD_WORD from spongeTheory) for words smaller than the blocklength minus
 two.
 *)
 val padding_lemma = prove (
-`` 
+``
 (LENGTH(m) < dimindex(:'r)-1)
-/\ 
+/\
 ( 2 < dimindex(:'r))
-/\ 
+/\
 (LENGTH(m) <> 0 )
-==> 
+==>
 (
-(BITS_TO_WORD (m ++ (T::(Zeros (dimindex(:'r)-2-LENGTH (m)))++[T]))):'r word 
-=  ((LENGTH m)-1 -- 0 ) (BITS_TO_WORD m) || PAD_WORD (LENGTH m) 
+(BITS_TO_WORD (m ++ (T::(Zeros (dimindex(:'r)-2-LENGTH (m)))++[T]))):'r word
+=  ((LENGTH m)-1 -- 0 ) (BITS_TO_WORD m) || PAD_WORD (LENGTH m)
 )
 ``,
-strip_tac >> 
+strip_tac >>
 qmatch_abbrev_tac`(BITS_TO_WORD ls) =  word` >>
 simp[GSYM WORD_EQ] >>
 rw [] >>
 `x < (LENGTH ls) ` by ( simp[Abbr`ls`,LengthZeros] ) >>
-simp[word_bit_BITS_TO_WORD, word_bit_def,Abbr`word`,word_bit_or, 
-PAD_WORD_def, fcpTheory.FCP_BETA,word_bits_def ]  >> 
+simp[word_bit_BITS_TO_WORD, word_bit_def,Abbr`word`,word_bit_or,
+PAD_WORD_def, fcpTheory.FCP_BETA,word_bits_def ]  >>
 Cases_on `x< LENGTH(m)`
 >-
   (
@@ -349,20 +349,20 @@ Cases_on `x< LENGTH(m)`
   simp[EL_APPEND2, EL_CONS] >>
   (* one case left *)
   Cases_on `PRE((x-LENGTH(m))) < dimindex(:'r) - (LENGTH(m) +2)`
-  >- 
+  >-
     (
     `PRE((x-LENGTH(m))) < LENGTH(Zeros( dimindex(:'r) - (LENGTH m +2)))` by
     simp [LengthZeros] >>
-    simp[EL_APPEND1, EL_APPEND2, EL_CONS, EL_Zeros] 
+    simp[EL_APPEND1, EL_APPEND2, EL_CONS, EL_Zeros]
     )
   >>
   pop_assum (fn thm => `x >= dimindex(:'r)-1` by simp [thm]) >>
   pop_assum (fn thm => `x = dimindex(:'r)-1` by simp [thm]) >>
   `(LENGTH (Zeros (dimindex ((:ς) :ς itself) − (LENGTH m + (2 :num)))))
   <= PRE((x-LENGTH(m)))` by simp [LengthZeros] >>
-  pop_assum (assume_tac    
+  pop_assum (assume_tac
   o (MATCH_MP (INST_TYPE [alpha |-> Type `:bool`] EL_APPEND2 ))) >>
-  simp [PRE_SUB1,LengthZeros] 
+  simp [PRE_SUB1,LengthZeros]
 );
 
 (*
@@ -370,39 +370,39 @@ This Theorem shows how to construct a correct padding (w.r.t. to
 PAD_WORD from spongeTheory) for empty words.
 *)
 val full_padding_lemma = prove (
-`` 
+``
 ( 2 < dimindex(:'r))
-==> 
+==>
 (
-(BITS_TO_WORD (T::(Zeros (dimindex(:'r)-2))++[T])):'r word 
-=  PAD_WORD (0) 
+(BITS_TO_WORD (T::(Zeros (dimindex(:'r)-2))++[T])):'r word
+=  PAD_WORD (0)
 )
 ``,
-strip_tac >> 
+strip_tac >>
 qmatch_abbrev_tac`(BITS_TO_WORD ls) =  word` >>
 simp[GSYM WORD_EQ] >>
 rw [] >>
 `x < (LENGTH ls) ` by ( simp[Abbr`ls`,LengthZeros] ) >>
-simp[word_bit_BITS_TO_WORD, word_bit_def,Abbr`word`,word_bit_or, 
+simp[word_bit_BITS_TO_WORD, word_bit_def,Abbr`word`,word_bit_or,
 PAD_WORD_def, fcpTheory.FCP_BETA,word_bits_def,LengthZeros] >>
-Cases_on `x=0` 
->- simp [Abbr`ls`] 
+Cases_on `x=0`
+>- simp [Abbr`ls`]
 >>
 `x>0` by simp[] >>
-simp [ Abbr`ls`,LengthZeros ,EL_CONS]  >> 
+simp [ Abbr`ls`,LengthZeros ,EL_CONS]  >>
 Cases_on `x< LENGTH(m)` >>
 pop_assum (fn thm => `0<x` by simp [thm]) >>
 Cases_on `x< dimindex(:'r)-1` >>
-lrw [EL_CONS,PRE_SUB1,EL_APPEND1, EL_APPEND2,EL_Zeros,LengthZeros]  >> 
+lrw [EL_CONS,PRE_SUB1,EL_APPEND1, EL_APPEND2,EL_Zeros,LengthZeros]  >>
 `x+1-dimindex(:'r)=0` by simp [] >>
-rw [] 
+rw []
 );
 
 (* The following two lemmas show how to construct a padding for a word
 that is one short to blocksize. If such a word m is padded, it takes two
 blocks, the first one being: m++T, the second one being F::F::..::T.
-one_short_lemma 
-  shows that using PAD_WORD as usual works for the first block, i.e., 
+one_short_lemma
+  shows that using PAD_WORD as usual works for the first block, i.e.,
   it adds a single T at the end of the bitstring.
 int_min_lemma
   shows that INT_MINw conveniently expresses the second block, which is
@@ -413,11 +413,11 @@ int_min_lemma
 TODO proof this lemma
 *)
 val one_short_lemma = prove (
-`` 
+``
 (LENGTH(m) = dimindex(:'r)-1)
-/\ 
+/\
 ( 2 < dimindex(:'r))
-==> 
+==>
 (
 (BITS_TO_WORD (m ++ [T]) =
 ((LENGTH m)-1 -- 0 ) (BITS_TO_WORD m) || PAD_WORD (LENGTH m) )
@@ -473,12 +473,12 @@ val MITB_FUN_def =
    /\
    (* Input: Absorbing -> {Absorbing,AbsorbEnd,Ready} *)
    (MITB_FUN f (Absorbing,pmem,vmem) (Input blk len)
-    = 
+    =
     let r=dimindex(:'r) in
       if len <= r-2 then (* More than one bit too small *)
-         if len = 0 then 
-          (Ready,pmem,f(vmem ?? ((ZERO:'c word) @@ PAD_WORD (0):'r word))) 
-         else 
+         if len = 0 then
+          (Ready,pmem,f(vmem ?? ((ZERO:'c word) @@ PAD_WORD (0):'r word)))
+         else
           (Ready,pmem,
            f ( vmem ??
            (
@@ -486,17 +486,17 @@ val MITB_FUN_def =
            ( (len-1 -- 0 ) (blk) || PAD_WORD (len) )
            )))
       else
-       if len = r-1 then  (* Exactly one-bit too small *) 
+       if len = r-1 then  (* Exactly one-bit too small *)
        (AbsorbEnd,
         pmem,
         (* see above. Note PAD_WORD 0x10* in this case *)
         f ( vmem ??
         (
         (ZERO:'c word) @@
-        ( (len-1 -- 0 ) (blk) || PAD_WORD (len) ) 
+        ( (len-1 -- 0 ) (blk) || PAD_WORD (len) )
         )))
        else  (* Full block *)
-      (Absorbing,pmem,f(vmem ?? ((ZERO: 'c word) @@ blk ))) 
+      (Absorbing,pmem,f(vmem ?? ((ZERO: 'c word) @@ blk )))
       )
    /\
    (* Move: AbsorbEnd -> Ready} *)
@@ -526,18 +526,18 @@ Functional version as in the paper
 val MITB_def =
  Define
   `MITB  f ((skip,move,block,size), (cntl,pmem,vmem)) =
-    MITB_FUN  f 
-     (cntl, pmem, vmem) 
+    MITB_FUN  f
+     (cntl, pmem, vmem)
      (if skip = T
        then Skip else
       if move = T
        then Move
-       else 
-         if (size <=dimindex(:'r)) then 
+       else
+         if (size <=dimindex(:'r)) then
           Input (block: 'r word) size
          else Skip)`;
 
-(* 
+(*
 We define a step function that behaves like MITB, but defines the
 output, too.
 Parametric in:
@@ -573,7 +573,7 @@ val _ =
           | Corrupt
           `;
 (*
-Datatype for 
+Datatype for
 - responses from the library/protocol to the adversary (real
   world)
 - responses from the simulator to the environment (ideal world)
@@ -586,7 +586,7 @@ OracleResponse is the response to an Oracle Query
 val _ =
  Hol_datatype
   `mac_to_adv_msg =
-            WasCorrupted 
+            WasCorrupted
           | OracleResponse of 'n word
           `;
 (*
@@ -597,16 +597,16 @@ Datatype for
 val _ =
  Hol_datatype
   `adv_to_mac_msg =
-            CorruptACK 
+            CorruptACK
           | OracleQuery of bits
           `;
 
 (*
 State transition function for the functionality defining a perfect MAC
 device for a given Hash function
-parameters: 
+parameters:
  H  -- Hash function
-internal state: 
+internal state:
  current key K, corruption status
 inputs:
  queries of type query
@@ -615,7 +615,7 @@ output:
 
 REMARK: Whoever is on the adversarial interface may request Hashes with
 K prepended to the input. This interface will be accessed by SIM, to be
-able to  emulate a MITB 
+able to  emulate a MITB
 
 FMAC
 : (bits -> 'n word) ->  (* Hash function *)
@@ -628,12 +628,12 @@ FMAC
 val FMAC_def =
     Define
           `
-          ( FMAC (H: bits -> 'n word) (K,F) 
+          ( FMAC (H: bits -> 'n word) (K,F)
               (EnvtoP (SetKey k:'r mac_query)) =
               ((k,F),(Proto_toEnv 0w))
-          )   
+          )
           /\
-          ( FMAC H (K,F) (EnvtoP (Mac m)) = 
+          ( FMAC H (K,F) (EnvtoP (Mac m)) =
             ((K,F),(Proto_toEnv (H (WORD_TO_BITS(K) ++ m)))))
           /\
           ( FMAC H (K,F) (EnvtoP (Corrupt)) = ((K,T),Proto_toA (WasCorrupted)))
@@ -659,31 +659,31 @@ output (preceeding outputs are discarded).
 *)
 val RunMITB_def =
  Define
-  `RunMITB  mitbf s (i::il) = 
-  if (il=[]) then 
+  `RunMITB  mitbf s (i::il) =
+  if (il=[]) then
      (mitbf (s,i))
-  else 
+  else
      let (s', out) = (mitbf (s,i)) in
        RunMITB  mitbf s' il
        `;
 
-(* 
+(*
 PROTO
 
-stepfunction defining the protocol. When used with a "correct" MITB (described by a step function), it implements FMAC. 
-     
+stepfunction defining the protocol. When used with a "correct" MITB (described by a step function), it implements FMAC.
+
 (In real life, this protocol corresponds to a client library that
 computes hashes by splitting the message and feeding it into the MITB.
 This is how honest users are supposed to use the MITB )
- 
-Parametric in: 
+
+Parametric in:
  mitbf - step function of MITB,
-Internal state: 
+Internal state:
  s - current MITB state
  T/F - corruption status
 Input:
  mac_query
-Output: 
+Output:
  bitstring
 
 TODO: Will be simplified using RunMITB above.
@@ -696,7 +696,7 @@ val PROTO_def =
               let (s1,(rdy1,dig1))=mitbf (s,(T,F,(ZERO: 'r word),0)) in
                 if rdy1=F then
                   (let (s2,(rdy2,dig2)) =mitbf(s1,(F,T,(ZERO:'r word),0)) in
-                    let (s3,(rdy3,dig3))= 
+                    let (s3,(rdy3,dig3))=
                     mitbf (s2,(F,F,k,(dimindex (:'r)))) in
                       ((s3,F),(Proto_toEnv 0w)))
                 else
@@ -719,8 +719,8 @@ val PROTO_def =
                 * and use the resulting state for computation with the next
                 * block
                 *)
-                let sf = 
-                 FOLDR (\blk. \state. 
+                let sf =
+                 FOLDR (\blk. \state.
                   let (si,rdyi,dgi) = mitbf
                   (* TODO check if BITS to word preserves the endianness for the
                   * last block *)
@@ -733,9 +733,9 @@ val PROTO_def =
                   ) sr (Split (dimindex(:'r)) m) in
                 (* let sf = AUX_FEED_MITB mitbf sr m in  *)
                   (* learn digest by skipping *)
-                  let (s1,rdy1,digest) = mitbf (sf,(T,F, (ZERO: 'r word),0)) in 
+                  let (s1,rdy1,digest) = mitbf (sf,(T,F, (ZERO: 'r word),0)) in
                   (* two consecutive moves to re-initialise vmem *)
-                  let (s2,rdy2,dig2) = mitbf (s1,(F,T, (ZERO: 'r word),0)) in 
+                  let (s2,rdy2,dig2) = mitbf (s1,(F,T, (ZERO: 'r word),0)) in
                   let (s3,rdy3,dig3) = mitbf (s2,(F,T, (ZERO: 'r word),0)) in
                     ((s3,F),(Proto_toEnv digest))
           )
@@ -768,10 +768,10 @@ val PROTO_def =
           ( PROTO mitbf (s,cor) _ = ((s,cor),(Proto_toEnv 0w)))
                 `;
 
-(* 
+(*
 SIM - step-function defining the simulator.
 The simulator can make queries to F, but only on the adversarial
-interface. It should not alter or read F's state directly. 
+interface. It should not alter or read F's state directly.
 
 REMARK: We first define a step function for SIM, which is then used in a
 wrapper function that instantiates the adversarial interface of F as an
@@ -791,10 +791,10 @@ val SIM_def =
 (SIM (T,Ready,vm,m) (EnvtoA (F,T,_,_)) = ((T,Absorbing,vm,[]),(Adv_toEnv
 (F,ZERO ))))
     /\
-(SIM (T,Absorbing,vm,m) (EnvtoA (F,T,_,_)) = 
+(SIM (T,Absorbing,vm,m) (EnvtoA (F,T,_,_)) =
 ((T,Ready,ZERO ,m),(Adv_toEnv (T,ZERO ))))
     /\
-(SIM (T,AbsorbEnd,vm,m) (EnvtoA (F,T,_,_)) = 
+(SIM (T,AbsorbEnd,vm,m) (EnvtoA (F,T,_,_)) =
 ((T,Ready,ZERO ,m),(Adv_toEnv (T,ZERO ))))
     /\
 (SIM (T,Absorbing,(vm: 'n word),m) (EnvtoA (F,F,(inp: 'r word),inp_size)) =
@@ -807,10 +807,10 @@ val SIM_def =
    *  *)
    if (inp_size=r) then
     ((T,Absorbing,ZERO, ((inp,inp_size)::m)),(Adv_toEnv (F,ZERO)))
-   else  
+   else
     if (inp_size=r-1) then
       ((T,AbsorbEnd,ZERO,((inp,inp_size)::m)),(Adv_toEnv (F,ZERO)))
-    else 
+    else
       if inp_size<r-1 then
       (*  Send to Functionality for communication. Proceed when response is *)
       (* received, see (MARK)  *)
@@ -818,7 +818,7 @@ val SIM_def =
            else (*if inp_size>r behave like Skip*)
       ((T,Absorbing,vm,m),(Adv_toEnv (F,ZERO)))
     (* ) *)
-    ) 
+    )
     /\
 (SIM (T,AbsorbEnd,vm,m) (EnvtoA (F,F,inp,inp_size)) =
   if (inp_size <= dimindex(:'r)) then
@@ -841,38 +841,38 @@ val SIM_def =
 (* Ignore other queries while not corrupted *)
 (SIM (F,cntl,vm,m) (EnvtoA _) = ((F,cntl,vm,m),(Adv_toEnv (F,ZERO))))
     /\
-(* Ignore other queries, while corrupted, in particular: 
+(* Ignore other queries, while corrupted, in particular:
  * query to set the key. *)
 (SIM (T,cntl,vm,m) (EnvtoA _) = ((T,cntl,vm,m),(Adv_toEnv (F,ZERO))))
       `;
 
 (* Type abbreviations for easier debugging *)
-val _ = 
+val _ =
  type_abbrev
-  ("real_game_state", 
+  ("real_game_state",
    ``: (('c,'r) mitb_state # bool) # num list ``);
 (*                           ^ corruption status *)
 
-val _ = type_abbrev ("sim_plus_ideal_game_state", 
+val _ = type_abbrev ("sim_plus_ideal_game_state",
    ``: (bits # bool) #('c,'r)  mitb_state ``);
 (*               ^ corruption status *)
 
 val _ = type_abbrev ("ideal_game_state", ``: (bits # bool) ``);
-(*                                 corruption status ^ *) 
+(*                                 corruption status ^ *)
 
 (* ('n,'r) real_message is *)
-val _ = type_abbrev ("real_message", 
+val _ = type_abbrev ("real_message",
     ``: ('r mac_query, 'r mitb_inp,  'n word,
      'n mitb_out , 'n mitb_out ,'r mitb_inp ) Message ``);
 
 (* ('n,'r) adv_message is *)
-val _ = type_abbrev ("adv_message", 
-    ``: ( 
+val _ = type_abbrev ("adv_message",
+    ``: (
     'r mitb_inp,
-     'n mitb_out 
+     'n mitb_out
      ) AdvMessage ``);
 
-val _ = type_abbrev ("env_message", 
+val _ = type_abbrev ("env_message",
     ``: ('r mac_query, 'r mitb_inp  ) EnvMessage ``);
 
 (*
@@ -881,45 +881,45 @@ parameters and the compression function
 *)
 (* TODO Does not work I can't see why *)
 
-(* val REAL_DUMMY_ADV_def = *) 
+(* val REAL_DUMMY_ADV_def = *)
 (*   Define ` *)
 (*  REAL_DUMMY_ADV  _ (m : ('n,'r) real_message) *)
 (* = *)
 (*     (DUMMY_ADV 0 m)`; *)
 
-(* val MITB_GAME_def = *) 
+(* val MITB_GAME_def = *)
 (*     Define ` *)
-(*       MITB_GAME f *) 
-(*         = *) 
-(*        EXEC_STEP *)  
+(*       MITB_GAME f *)
+(*         = *)
+(*        EXEC_STEP *)
 (*        ( PROTO ( (MITB_STEP:('c,'n,'r) mitbstepfunction) f)) *)
 (*        REAL_DUMMY_ADV *)
 (*         `; *)
 
 (*
 
-val ALMOST_IDEAL_GAME_def = 
+val ALMOST_IDEAL_GAME_def =
     Define `
       (ALMOST_IDEAL_GAME (r,(c:num),(n:num)) (h: bits -> bits ) )
-      : 
+      :
       =
       EXEC_STEP ( FMAC (r,c,n) h) (SIM (r,c,n))
       `
       *)
 
-(* 
+(*
 We define the invariant that is to be preserved after every
 invocation of the real world and the ideal world with the same inputs.
 *)
 
 (* corruption status in real and ideal world correspond *)
-val STATE_INVARIANT_COR_def = 
+val STATE_INVARIANT_COR_def =
     Define `
     STATE_INVARIANT_COR ((cntl,pmem,vmem),cor_r) ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)) =
     ((cor_r = cor_f) /\ (cor_f = cor_s))
     `;
 
-(* 
+(*
 if real game is corrupted, the cntl-state of the MITB simulated by SIM
 and the actual MITB in the real game correspond.
 *)
@@ -936,7 +936,7 @@ val STATE_INVARIANT_CNTL_def =
     `;
 
 (* The complete invariant (will grow in the future) *)
-val STATE_INVARIANT_def = 
+val STATE_INVARIANT_def =
   Define `
   STATE_INVARIANT (state_r) (state_f) =
      (STATE_INVARIANT_COR (state_r) (state_f))
@@ -995,7 +995,7 @@ in
     PURE_REWRITE_RULE[markerTheory.Abbrev_def])
 end g
 
-(* 
+(*
 The following two lemmas are used in the (uncomplete) proof for the
 Invariant_cor and Invariant_cntl below, but will substituted by a
 stronger lemma derived from put_in_ready_state_lemma, mac_message_lemma
@@ -1006,7 +1006,7 @@ uses PROCESS_MESSAGE_LIST (defined below) and then strengthen lemma so
 it defines vmem.
 lemma_proto_mac_cor_one_andahalf and lemma_proto_mac_cor_two are then
 obsolete.
-*) 
+*)
 
 val lemma_proto_mac_cor_one_andahalf = prove (
  ``
@@ -1016,8 +1016,8 @@ val lemma_proto_mac_cor_one_andahalf = prove (
  (?dig foo bar .
  (state_out = (((foo,F),0),PtoEnv dig)))
  ``,
- rw [] >> 
-    simp [ROUTE_def,PROTO_def, pairTheory.UNCURRY, PROTO_WRAPPER_def] 
+ rw [] >>
+    simp [ROUTE_def,PROTO_def, pairTheory.UNCURRY, PROTO_WRAPPER_def]
     );
 
 val lemma_proto_mac_cor_two = prove (
@@ -1028,7 +1028,7 @@ val lemma_proto_mac_cor_two = prove (
  (?dig foo bar .
  (state_out = ((((Ready,foo,bar),F),0),PtoEnv dig)))
  ``,
- rw [] >> 
+ rw [] >>
     simp [ROUTE_def,PROTO_def, pairTheory.UNCURRY,
     PROTO_WRAPPER_def] >>
     (* simp [MITB_STEP_def, MITB_FUN_def] *)
@@ -1043,11 +1043,11 @@ val rws =
                                         ]
 
 
-val mitb_skip_lemma = 
+val mitb_skip_lemma =
   prove (
   ``
     (((cntl',pmem',vmem'),(rdy,dig)) = RunMITB (MITB_STEP f) (cntl,pmem,vmem) [(T,b,inp,len)] )
-    ==> 
+    ==>
     ( cntl=cntl')
     /\
     ( pmem=pmem')
@@ -1071,12 +1071,12 @@ state.
 val put_in_ready_state_lemma = prove (
 ``
     (
-    (((cntl',pmem',vmem'),(rdy,dig)) = 
+    (((cntl',pmem',vmem'),(rdy,dig)) =
      let ((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) =
         RunMITB (MITB_STEP f) (cntl,pmem,vmem) [(T,b,inp,len)]
       in
         if (rdy_t=F) then
-          RunMITB (MITB_STEP f) (cntl_t,pmem_t,vmem_t) [(F,T,inp2,len2)] 
+          RunMITB (MITB_STEP f) (cntl_t,pmem_t,vmem_t) [(F,T,inp2,len2)]
         else
           ((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t))
      )
@@ -1088,16 +1088,16 @@ val put_in_ready_state_lemma = prove (
     ``,
     rw [LET_THM] >>
     last_assum(PairCases_on_tm o rand o  rand o concl) >>
-    POP_ASSUM (ASSUME_TAC o SYM ) >> 
+    POP_ASSUM (ASSUME_TAC o SYM ) >>
     first_assum(mp_tac o MATCH_MP mitb_skip_lemma) >>
     rw [] >>
-    Cases_on `p3` >> 
-    fs [] >> 
+    Cases_on `p3` >>
+    fs [] >>
     fs [RunMITB_def, MITB_STEP_def, MITB_FUN_def, MITB_def] >>
     fsrw_tac [ARITH_ss] [LET_THM]
     );
 
-(* 
+(*
 PROCESS_MESSAGE_LIST: bits list -> 'r mitb_inp list
 Given a list of bitstrings, PROCESS_MESSAGE_LIST produces a list of
 input queries to the MITB that will leave the MITB in ready state, with
@@ -1117,7 +1117,7 @@ val PROCESS_MESSAGE_LIST_def= Define
       else
         (if (LENGTH hd) <  dimindex(:'r)-1 then
           [ (F,F,(BITS_TO_WORD hd),(LENGTH hd)) ]
-        else 
+        else
           ((F,F,(BITS_TO_WORD hd),(LENGTH hd))
            :: (PROCESS_MESSAGE_LIST tl))))
   `;
@@ -1162,12 +1162,12 @@ properly computed hash,  given that the MITB was in ready state before
 
 REMARK: During protocol excution, we will be able to establish that
 vmem equals pmem after moving into Absorbing. Thus
-(Absorb f vmem (SplittoWords (Pad ( dimindex(:'r) ) m))) 
+(Absorb f vmem (SplittoWords (Pad ( dimindex(:'r) ) m)))
 will equal Hash f ..  if composed right.
 *)
 
 val mac_message_lemma = prove (
-``! r m pmem vmem. 
+``! r m pmem vmem.
    (
    (r = dimindex(:'r))
    /\
@@ -1176,7 +1176,7 @@ val mac_message_lemma = prove (
    ==>
    (
    (((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) =
-        RunMITB 
+        RunMITB
           (MITB_STEP: ('c,'n,'r)mitbstepfunction  f)
           (Absorbing,pmem,vmem)
          (PROCESS_MESSAGE_LIST
@@ -1187,13 +1187,13 @@ val mac_message_lemma = prove (
     /\
     ( pmem_t = pmem )
     /\
-    ( vmem_t = (Absorb f vmem 
+    ( vmem_t = (Absorb f vmem
        (SplittoWords (Pad ( dimindex(:'r) ) m))
        )))))
     ``,
-   recInduct(Split_ind) >> 
+   recInduct(Split_ind) >>
    strip_tac >> strip_tac >>
-   Cases_on `(LENGTH msg) <= dimindex(:'r)` 
+   Cases_on `(LENGTH msg) <= dimindex(:'r)`
    >-
    (
     simp [GoodParameters_def,(Once Split_def)] >>
@@ -1206,11 +1206,11 @@ val mac_message_lemma = prove (
      \/
      ((0 < LENGTH msg) /\ (LENGTH msg < dimindex(:'r)-1 ))
      \/
-     (0 = LENGTH msg )` by simp [] 
+     (0 = LENGTH msg )` by simp []
     >- (* LENGTH msg = dimindex(:'r) *)
     (
       fs rws_macking >>
-      fsrw_tac [ARITH_ss] [] >> 
+      fsrw_tac [ARITH_ss] [] >>
       fs rws_macking >>
       ` ~(dimindex(:'r) <= dimindex(:'r) -2)` by simp [] >>
       pop_assum (fn thm => fsrw_tac[ARITH_ss] [thm]) >>
@@ -1220,34 +1220,34 @@ val mac_message_lemma = prove (
       `! rest more . ((msg++[T])++ rest) ++ more
        = msg++ ([T]++ rest ++ more)` by rw [] >>
       pop_assum (fn thm => PURE_REWRITE_TAC [thm]) >>
-      qmatch_abbrev_tac 
-        `word = Absorb f vmem 
+      qmatch_abbrev_tac
+        `word = Absorb f vmem
            (MAP BITS_TO_WORD (Split (len) (msg ++
            rest )))` >>
-      cheat 
+      cheat
       (* this proof should be easy using LengthZeros, but it isn't *)
       (* `LENGTH(rest)=dimindex(:'r)` by (simp [Abbr`rest`] >> *)
       (* fs[ LengthZeros ] ) >> *)
       (* Q.ISPECL_THEN  [`msg`,`rest`] assume_tac  Split_APPEND >> *)
-      (* `0<LENGTH(msg) /\ 0<LENGTH(rest)` by simp [] >> *) 
+      (* `0<LENGTH(msg) /\ 0<LENGTH(rest)` by simp [] >> *)
       (* lfs [] >> ntac 2 (pop_assum (fn thm => ALL_TAC)) >> *)
-      (* pop_assum (fn thm => simp [thm]) >> *) 
-      (* qpat_abbrev_tac `bla= (LENGTH msg)` >> *) 
-      (* qpat_abbrev_tac `blubb=(msg++rest)` >> *) 
-      (* qpat_abbrev_tac `fii=((Split bla) blubb)` >> *) 
+      (* pop_assum (fn thm => simp [thm]) >> *)
+      (* qpat_abbrev_tac `bla= (LENGTH msg)` >> *)
+      (* qpat_abbrev_tac `blubb=(msg++rest)` >> *)
+      (* qpat_abbrev_tac `fii=((Split bla) blubb)` >> *)
       (* (1* WEIRD... this fails ... *1) *)
       (* simp [ INST_TYPE [alpha |-> Type `:bool `] Split_APPEND] >> *)
       (* pop_assum (fn thm => PURE_REWRITE_TAC [thm]) >> *)
 
-      (* qpat_abbrev_tac `M=(Split (dimindex(:'r)) msg): bits list` >> *) 
+      (* qpat_abbrev_tac `M=(Split (dimindex(:'r)) msg): bits list` >> *)
       (* qpat_assum `Split (dimindex(:'r)) msg = X` (fn thm => *)
-      (* (PURE_REWRITE_TAC [thm]>> assume_tac thm)) >> *) 
-      (* lrfs [] *) 
+      (* (PURE_REWRITE_TAC [thm]>> assume_tac thm)) >> *)
+      (* lrfs [] *)
       (* fs rws_macking >> *)
 
       (* `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >> *)
       (* lfs (rws @ rws_macking @ rws_hash) >> *)
-      (* simp rws_hash >> *) 
+      (* simp rws_hash >> *)
 
       (* qpat_abbrev_tac `R=(dimindex(:'r))` >> *)
       (* qpat_abbrev_tac `Z= ( R - 2)` >> *)
@@ -1256,7 +1256,7 @@ val mac_message_lemma = prove (
       (* `! rest more . ((msg++[T])++ rest) ++ more *)
       (*  = msg++ ([T]++ rest ++ more)` by rw [] >> *)
       (* pop_assum (fn thm => PURE_REWRITE_TAC [thm]) >> *)
-      (* qpat_assum `LENGTH msg = x` *) 
+      (* qpat_assum `LENGTH msg = x` *)
       (*   (fn thm => PURE_REWRITE_TAC [thm,TAKE_LENGTH_APPEND] >> assume_tac thm) *)
 
 
@@ -1264,15 +1264,15 @@ val mac_message_lemma = prove (
       (* `SplittoWords w = (MAP (BITS_TO_WORD:bits -> 'r word)) (Split *)
       (* (dimindex(:'r)) w)` by *)
       (* rw[SplittoWords_def] *)
-      (* simp [SplittoWords_def,GSYM combinTheory.o_THM] *) 
+      (* simp [SplittoWords_def,GSYM combinTheory.o_THM] *)
 
     (* from a previous attempt  *)
-    (* >> *) 
+    (* >> *)
     (* `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >> *)
     (* TRY (`LENGTH msg <= dimindex(:'r)-2` by decide_tac ) >> *)
     (* lfs (rws @ rws_macking) >> *)
     (* fs rws_hash >> *)
-    (* lfs [] *) 
+    (* lfs [] *)
     (* >- (1* LENGTH msg = dimindex(:'r) *1) *)
     (* ( *)
     (*   `((dimindex(:'r) - (dimindex(:'r)+2) MOD dimindex(:'r) MOD *)
@@ -1281,7 +1281,7 @@ val mac_message_lemma = prove (
     (*   fs [] >> *)
     (*   Q.ISPEC_THEN `msg:bits` (ASSUME_TAC) TAKE_LENGTH_APPEND >> *)
     (*   Q.ISPEC_THEN `msg:bits` (ASSUME_TAC) DROP_LENGTH_APPEND >> *)
-    (*   qpat_assum `LENGTH msg = X` (fn tm => fs [tm] >> assume_tac tm ) >> *) 
+    (*   qpat_assum `LENGTH msg = X` (fn tm => fs [tm] >> assume_tac tm ) >> *)
     (*   asm_simp_tac std_ss [GSYM APPEND_ASSOC]  >> *)
 
     (*   rw [Once (Split_def),LengthZeros,padding_block_full] >> *)
@@ -1293,30 +1293,30 @@ val mac_message_lemma = prove (
     cheat
     )
   >>
-   qpat_abbrev_tac `R= dimindex(:'r) ` >> 
+   qpat_abbrev_tac `R= dimindex(:'r) ` >>
    rw [GoodParameters_def] >>
-   `R <> 0` by DECIDE_TAC >> 
-   POP_ASSUM (fn tm => fs [tm]) >> 
+   `R <> 0` by DECIDE_TAC >>
+   POP_ASSUM (fn tm => fs [tm]) >>
    rfs [] >>
-   (* qpat_assum `~(LENGTH msg <= R)` (fn thm => fs [thm]) >> *) 
-   (* lfs >> *) 
+   (* qpat_assum `~(LENGTH msg <= R)` (fn thm => fs [thm]) >> *)
+   (* lfs >> *)
    cheat
    (* worked quite well *)
-   (* fs [(Once Split_def) ] >> *) 
-   (* lfs rws_macking >> *) 
+   (* fs [(Once Split_def) ] >> *)
+   (* lfs rws_macking >> *)
    (* lfs [] >> *)
    (* rfs [] >> *)
    (*  lfs [PROCESS_MESSAGE_LIST_def, (Once Split_def)]  >> *)
    (* `~(R=0)` by simp []  >> *)
    (*  fs [] >> *)
    (* ------------------------------- *)
-   (*  `(LENGTH (TAKE (dimindex(:'r)) msg)) = (dimindex (:'r))` *) 
+   (*  `(LENGTH (TAKE (dimindex(:'r)) msg)) = (dimindex (:'r))` *)
    (*    by  first_assum (mp_tac o MATCH_MP listTheory.LENGTH_TAKE) *)
    (*    simp [] *)
     );
 
-(* We want to show this thing actually *) 
-(* TODO use prev. lemma to  show this *) 
+(* We want to show this thing actually *)
+(* TODO use prev. lemma to  show this *)
 (* `! r m . *)
 (*    ( *)
 (*    (r = dimindex(:'r)) *)
@@ -1324,7 +1324,7 @@ val mac_message_lemma = prove (
 (*    (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n))) *)
 (*    /\ *)
 (*    (((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) = *)
-(*         RunMITB *) 
+(*         RunMITB *)
 (*           (MITB_STEP: ('c,'n,'r)mitbstepfunction  f) *)
 (*           (Ready,pmem,vmem) *)
 (*         ((F,T,inp,len) *)
@@ -1355,22 +1355,22 @@ val Invariant_cor = prove(
      (* The functionality's state (cor_s is shared with Sim)*)
       k cor_f
       (* The simulator's state *)
-      cor_s cntl_s vm_s m_s 
+      cor_s cntl_s vm_s m_s
       (* The environment's query *)
       input.
         (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
-        /\ 
+        /\
         (STATE_INVARIANT ((cntl,pmem,vmem),cor_r)
         ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
       ==>
       let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r) =
-      EXEC_STEP (PROTO (MITB_STEP f)) 
+      EXEC_STEP (PROTO (MITB_STEP f))
       DUMMY_ADV ((((cntl,pmem,vmem),cor_r),0),input)
       in
         (
-        let 
+        let
         (((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)),out_i) =
-           EXEC_STEP ( FMAC  h) SIM 
+           EXEC_STEP ( FMAC  h) SIM
                       (((k,cor_f),(cor_s,cntl_s,vm_s,m_s)),input)
         in
         (STATE_INVARIANT_COR ((cntl_n,pmem_n,vmem_n), cor_r_n)
@@ -1398,19 +1398,19 @@ val Invariant_cor = prove(
       )
     >> (*Input to protocol *)
     (
-      Cases_on `cor_f` 
-      >- 
+      Cases_on `cor_f`
+      >-
       ( (* cor_f T  (proto ignores messages) *)
         split_all_pairs_tac >>
         split_all_control_tac >>
-        Cases_on `b` >> 
-        fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def, ROUTE_def, PROTO_def, PROTO_WRAPPER_def] >> 
+        Cases_on `b` >>
+        fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def, ROUTE_def, PROTO_def, PROTO_WRAPPER_def] >>
         RULE_ASSUM_TAC EVAL_RULE >>
         fs[STATE_INVARIANT_COR_def]
       )
       >> (*cor_f F *)
       (
-      Cases_on `? m. b=(Mac m)` 
+      Cases_on `? m. b=(Mac m)`
         >-
         (
           fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def] >>
@@ -1426,7 +1426,7 @@ val Invariant_cor = prove(
           fsrw_tac [ARITH_ss] rws >> rw[] >>
           simp []
         )
-        >> 
+        >>
         (
           Cases_on `b` >>
           split_all_pairs_tac >>
@@ -1435,7 +1435,7 @@ val Invariant_cor = prove(
           fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def,
           STATE_INVARIANT_COR_def] >>
           split_all_bools_tac >>
-          fsrw_tac [ARITH_ss] rws >> rw[] 
+          fsrw_tac [ARITH_ss] rws >> rw[]
         )
       )
     )
@@ -1453,22 +1453,22 @@ val Invariant_cntl = prove(
      (* The functionality's state (cor_s is shared with Sim)*)
       k cor_f
       (* The simulator's state *)
-      cor_s cntl_s vm_s m_s 
+      cor_s cntl_s vm_s m_s
       (* The environment's query *)
       input.
         (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
-        /\ 
+        /\
         (STATE_INVARIANT ((cntl,pmem,vmem),cor_r)
         ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
       ==>
       let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r) =
-      EXEC_STEP (PROTO (MITB_STEP f)) 
+      EXEC_STEP (PROTO (MITB_STEP f))
       DUMMY_ADV ((((cntl,pmem,vmem),cor_r),0),input)
       in
         (
-        let 
+        let
         (((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)),out_i) =
-           EXEC_STEP ( FMAC  h) SIM 
+           EXEC_STEP ( FMAC  h) SIM
                       (((k,cor_f),(cor_s,cntl_s,vm_s,m_s)),input)
         in
         (STATE_INVARIANT_CNTL ((cntl_n,pmem_n,vmem_n), cor_r_n)
@@ -1496,13 +1496,13 @@ val Invariant_cntl = prove(
       fsrw_tac [ARITH_ss] rws
       )
       >> (* Input to Proto *)
-      Cases_on `cor_f` 
-      >- 
+      Cases_on `cor_f`
+      >-
       ( (* cor_f T  (proto ignores messages) *)
         split_all_pairs_tac >>
         split_all_control_tac >>
-        Cases_on `b` >> 
-        fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def, ROUTE_def, PROTO_def, PROTO_WRAPPER_def] >> 
+        Cases_on `b` >>
+        fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def, ROUTE_def, PROTO_def, PROTO_WRAPPER_def] >>
         RULE_ASSUM_TAC EVAL_RULE >>
         fs[STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def]
       )
@@ -1510,7 +1510,7 @@ val Invariant_cntl = prove(
       (
       fs [STATE_INVARIANT_def, STATE_INVARIANT_COR_def,
       STATE_INVARIANT_CNTL_def ] >>
-      Cases_on `? m. b=(Mac m)` 
+      Cases_on `? m. b=(Mac m)`
         >-
         (
           fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def] >>
@@ -1526,7 +1526,7 @@ val Invariant_cntl = prove(
           fsrw_tac [ARITH_ss] rws >> rw[] >>
           simp []
         )
-        >> 
+        >>
         (
           Cases_on `b` >>
           split_all_pairs_tac >>
@@ -1535,7 +1535,7 @@ val Invariant_cntl = prove(
           fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def,
           STATE_INVARIANT_COR_def] >>
           split_all_bools_tac >>
-          fsrw_tac [ARITH_ss] rws >> rw[] 
+          fsrw_tac [ARITH_ss] rws >> rw[]
         )
         )
 );

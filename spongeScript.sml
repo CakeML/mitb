@@ -9,7 +9,7 @@ Roughly:
 
  Hash msg =  Output(Absorb initial_state (Split (Pad msg)))
 
-  - Pad adds additional bits (specified by Keccak) to 
+  - Pad adds additional bits (specified by Keccak) to
     extend msg so the result can be split into blocks
 
   - Split splits a message into a list of blocks
@@ -23,19 +23,19 @@ used for absorbing, and (r,c,n) where r is the "bitrate" (i.e. block
 size), c is the "capacity" (a parameter used by the sponge algorithm)
 and n is the digest length. The definition of Hash is thus actually:
 
- Hash (r,c,n) f initial_state msg = 
+ Hash (r,c,n) f initial_state msg =
   Output n (Absorb f c initial_state (Split r (Pad r msg)))
 
 The initial_state consists entirely of zeros.
 
-***********************************************************************) 
+***********************************************************************)
 
 (* Load stuff below when running interactively *)
 
 (*
 app load ["rich_listTheory","intLib","Cooper"];
 open HolKernel Parse boolLib bossLib
-     listTheory rich_listTheory 
+     listTheory rich_listTheory
      arithmeticTheory Arith numLib computeLib
      Cooper;
 
@@ -45,7 +45,7 @@ intLib.deprecate_int();
 
 (* Hide stuff above and expose stuff below when compiling *)
 open HolKernel Parse boolLib bossLib
-     listTheory rich_listTheory 
+     listTheory rich_listTheory
      arithmeticTheory Arith numLib computeLib
      wordsLib
      Cooper;
@@ -60,7 +60,7 @@ val _ = intLib.deprecate_int();
 
 val _ = new_theory "sponge";
 
-(* 
+(*
 Bit sizes:
  digest   (n): 224
  capacity (c): 448
@@ -89,7 +89,7 @@ val Zeros_def =
 val WORD_TO_BITS_def=
   Define
   ` WORD_TO_BITS (w:'l word) =
-  let 
+  let
     bitstring_without_zeros =  MAP (\e.if e=1 then T else F) (word_to_bin_list w)
   in
     ( Zeros (dimindex(:'l) - (LENGTH bitstring_without_zeros) )) ++
@@ -97,7 +97,7 @@ val WORD_TO_BITS_def=
 
 val BITS_TO_WORD_def=
   Define
-  ` BITS_TO_WORD = 
+  ` BITS_TO_WORD =
       word_from_bin_list o ( MAP (\e.if e then 1 else 0))`;
 
 (*
@@ -114,11 +114,11 @@ val ZerosOneToOne =
  store_thm
   ("ZerosOneToOne",
    ``!m n. (Zeros m = Zeros n) = (m = n)``,
-   Induct 
+   Induct
     THEN Induct
     THEN RW_TAC list_ss [Zeros_def]);
 
-(*        
+(*
 PadZeros r msg computes the smallest number n such that the length of
 (msg ++ [T] ++ Zeros n ++ [T]) is a multiple of r, i.e.:
 
@@ -129,11 +129,11 @@ has this property:
 
  LeastPad
  |- !r msg.
-     2 < r 
+     2 < r
      ==>
-     (LENGTH (msg ++ [T] ++ Zeros (PadZeros r msg) ++ [T]) MOD r = 0) 
+     (LENGTH (msg ++ [T] ++ Zeros (PadZeros r msg) ++ [T]) MOD r = 0)
      /\
-     !n. (LENGTH (msg ++ [T] ++ Zeros n ++ [T]) MOD r = 0) 
+     !n. (LENGTH (msg ++ [T] ++ Zeros n ++ [T]) MOD r = 0)
          ==>
          PadZeros r msg <= n
 
@@ -147,8 +147,8 @@ definition:
  PadZerosLemma
  |- !msg r.
      1 < r
-     ==> 
-     (PadZeros r msg = 
+     ==>
+     (PadZeros r msg =
        if (LENGTH msg MOD r = r - 1 )
         then r - 1
         else r - LENGTH msg MOD r - 2)
@@ -169,7 +169,7 @@ val Pad_def =
  Define
   `Pad r msg = msg ++ [T] ++ Zeros(PadZeros r msg) ++ [T]`;
 
-(* 
+(*
 Various lemmas needed to prove LeastPad, PadZerosLemma and
 LengthPadDivides.
 
@@ -179,9 +179,9 @@ The HOL4 proofs could probably be made much shorter and more elegant
 
 val LengthPadLemma1 =
  prove
-  (``!r msg n. 
-      (2 < r) /\ (LENGTH msg = n * r) 
-      ==> 
+  (``!r msg n.
+      (2 < r) /\ (LENGTH msg = n * r)
+      ==>
       (LENGTH(Pad r msg) = (n + 1) * r)``,
    RW_TAC list_ss [Pad_def,PadZeros_def,LengthZeros,MOD_TIMES]);
 
@@ -196,12 +196,12 @@ val MULT_ADD_MOD =
    RW_TAC arith_ss[]
     THEN `0 < r` by DECIDE_TAC
     THEN PROVE_TAC[MOD_TIMES,ADD_SYM,LESS_MOD]);
-   
+
 val LengthPadLemma2 =
  prove
-  (``!r msg n p. 
-      (0 < p) /\ (p + 2 < r) /\ (LENGTH msg = n * r + p) 
-      ==> 
+  (``!r msg n p.
+      (0 < p) /\ (p + 2 < r) /\ (LENGTH msg = n * r + p)
+      ==>
       (LENGTH(Pad r msg) = (n + 1) * r)``,
    RW_TAC list_ss [Pad_def,PadZeros_def,LengthZeros,MOD_TIMES]
     THEN `0 < p + 2` by DECIDE_TAC
@@ -214,9 +214,9 @@ val LengthPadLemma2 =
 
 val LengthPadLemma3 =
  prove
-  (``!r msg n. 
-      (2 < r) /\ (LENGTH msg = n * r + (r - 2)) 
-      ==> 
+  (``!r msg n.
+      (2 < r) /\ (LENGTH msg = n * r + (r - 2))
+      ==>
       (LENGTH(Pad r msg) = (n + 1) * r)``,
    RW_TAC list_ss [Pad_def,PadZeros_def,LengthZeros,MOD_TIMES]
     THEN `r + n * r = (n + 1) * r` by DECIDE_TAC
@@ -226,12 +226,12 @@ val LengthPadLemma3 =
 
 val LengthPadLemma4 =
  prove
-  (``!r msg n. 
-      (2 < r) /\ (LENGTH msg = n * r + (r - 1)) 
-      ==> 
+  (``!r msg n.
+      (2 < r) /\ (LENGTH msg = n * r + (r - 1))
+      ==>
       (LENGTH(Pad r msg) = (n + 2) * r)``,
    RW_TAC list_ss [Pad_def,PadZeros_def,LengthZeros,MOD_TIMES]
-    THEN `r + (n * r + 1) = (n + 1) * r + 1` 
+    THEN `r + (n * r + 1) = (n + 1) * r + 1`
           by PROVE_TAC[ADD_SYM,ADD_ASSOC,RIGHT_ADD_DISTRIB,MULT_LEFT_1]
     THEN RW_TAC std_ss []
     THEN `1 < r` by DECIDE_TAC
@@ -242,9 +242,9 @@ val LengthPadLemma4 =
 
 val LengthPadLemma5 =
  prove
-  (``!r msg n p. 
-      2 < r /\ p < r /\ (LENGTH msg = n * r + p) 
-      ==> 
+  (``!r msg n p.
+      2 < r /\ p < r /\ (LENGTH msg = n * r + p)
+      ==>
       (LENGTH(Pad r msg) = (n + (if p = r - 1 then 2 else 1)) * r)``,
    RW_TAC std_ss []
     THENL
@@ -253,7 +253,7 @@ val LengthPadLemma5 =
        THENL
         [`p + 2 < r \/ (p = r - 2) \/ (p = r - 1)`
           by PROVE_TAC
-              [DECIDE 
+              [DECIDE
                 ``2 < r /\ p < r ==> p + 2 < r \/ (p = r - 2) \/ (p = r - 1)``]
           THENL
            [PROVE_TAC[LengthPadLemma2],
@@ -266,9 +266,9 @@ val LengthPadLemma5 =
 
 val LengthPadLemma6 =
  prove
-  (``!r msg. 
-      2 < r 
-      ==> 
+  (``!r msg.
+      2 < r
+      ==>
       ?n p.
        p < r
        /\
@@ -290,12 +290,12 @@ Pad r msg produces a strin whose length is a multiple of r
 val LengthPad =
  store_thm
   ("LengthPad",
-   ``!r msg. 
-      2 < r 
-      ==> 
-      (LENGTH(Pad r msg) = 
-        (if (LENGTH msg MOD r) = r-1 
-          then ((LENGTH msg DIV r) + 2) 
+   ``!r msg.
+      2 < r
+      ==>
+      (LENGTH(Pad r msg) =
+        (if (LENGTH msg MOD r) = r-1
+          then ((LENGTH msg DIV r) + 2)
           else ((LENGTH msg DIV r) + 1)) * r)``,
    RW_TAC std_ss []
     THEN IMP_RES_TAC LengthPadLemma6
@@ -321,7 +321,7 @@ val ADD_MOD_ZERO1 =
       ?n. p = n * r - m MOD r``,
    RW_TAC arith_ss []
     THEN `?d. m + p = d * r` by PROVE_TAC[MOD_EQ_0_DIVISOR]
-    THEN `((m DIV r) * r + m MOD r + p = d * r) /\ m MOD r < r` 
+    THEN `((m DIV r) * r + m MOD r + p = d * r) /\ m MOD r < r`
           by PROVE_TAC[DIVISION]
     THEN Q.EXISTS_TAC `d - (m DIV r)`
     THEN RW_TAC arith_ss [RIGHT_SUB_DISTRIB]);
@@ -347,7 +347,7 @@ val ADD_MOD_ZERO2 =
       ==>
       ((m + p) MOD r = 0)``,
    RW_TAC arith_ss []
-    THEN `(m = (m DIV r) * r + m MOD r) /\ m MOD r < r` 
+    THEN `(m = (m DIV r) * r + m MOD r) /\ m MOD r < r`
           by PROVE_TAC[DIVISION]
     THEN `n = SUC(PRE n)` by DECIDE_TAC
     THEN POP_ASSUM(ASSUME_TAC o SIMP_RULE arith_ss [ADD1])
@@ -393,7 +393,7 @@ val ADD_MOD_ZERO_COR2 =
       ==>
      ((LENGTH(msg ++ [T] ++ Zeros n ++ [T]) MOD r = 0) =
       ?m. (if LENGTH msg MOD r = r - 1 then 1 else 0) < m
-          /\ 
+          /\
           (n = m * r - LENGTH msg MOD r - 2))``,
    RW_TAC std_ss []
     THEN `0 < r` by DECIDE_TAC
@@ -456,16 +456,16 @@ val MOD_ADD2_NEQ =
 val PadZerosLemma1 =
  prove
   (``!r msg.
-      1 < r /\ (LENGTH msg MOD r = r - 1) 
-      ==> 
+      1 < r /\ (LENGTH msg MOD r = r - 1)
+      ==>
       (PadZeros r msg = r - 1)``,
    RW_TAC arith_ss [PadZeros_def,MOD_ADD2_EQ]);
 
 val PadZerosLemma2 =
  prove
   (``!r msg.
-      1 < r /\ ~(LENGTH msg MOD r = r - 1) 
-      ==> 
+      1 < r /\ ~(LENGTH msg MOD r = r - 1)
+      ==>
       (PadZeros r msg = r - LENGTH msg MOD r - 2)``,
    REWRITE_TAC[PadZeros_def,MOD_ADD2_NEQ]);
 
@@ -474,8 +474,8 @@ val PadZerosLemma =
  ("PadZerosLemma",
   ``!r msg.
      1 < r
-     ==> 
-     (PadZeros r msg = 
+     ==>
+     (PadZeros r msg =
        if (LENGTH msg MOD r = r - 1 )
         then r - 1
         else r - LENGTH msg MOD r - 2)``,
@@ -484,7 +484,7 @@ val PadZerosLemma =
 val LeastPad1 =
  prove
   (``!r msg.
-      2 < r /\ (LENGTH msg MOD r = r - 1 ) 
+      2 < r /\ (LENGTH msg MOD r = r - 1 )
       ==> (LENGTH(msg ++ [T] ++ Zeros(r - 1) ++ [T]) MOD r = 0)``,
    RW_TAC std_ss []
     THEN `0 < r` by DECIDE_TAC
@@ -496,9 +496,9 @@ val LeastPad1 =
 val LeastPad2 =
  prove
   (``!r msg.
-      2 < r 
-      /\ 
-      (LENGTH msg MOD r = r - 1 ) 
+      2 < r
+      /\
+      (LENGTH msg MOD r = r - 1 )
       /\
       (LENGTH(msg ++ [T] ++ Zeros n ++ [T]) MOD r = 0)
       ==>
@@ -512,14 +512,14 @@ val LeastPad2 =
 
 val LeastPad3 =
  prove
-  (``!r msg. 
-      2 < r /\ ~(LENGTH msg MOD r = r - 1 ) 
-      ==> 
+  (``!r msg.
+      2 < r /\ ~(LENGTH msg MOD r = r - 1 )
+      ==>
       (LENGTH(msg ++ [T] ++ Zeros(r - LENGTH msg MOD r - 2) ++ [T]) MOD r = 0)``,
    RW_TAC std_ss []
     THEN `0 < r` by DECIDE_TAC
     THEN `1 < r` by DECIDE_TAC
-    THEN `r - LENGTH msg MOD r - 2 = PadZeros r msg` 
+    THEN `r - LENGTH msg MOD r - 2 = PadZeros r msg`
           by PROVE_TAC[PadZerosLemma]
     THEN RW_TAC arith_ss [GSYM Pad_def,LengthPad]
     THEN PROVE_TAC[MOD_EQ_0,MULT_SYM]);
@@ -527,9 +527,9 @@ val LeastPad3 =
 val LeastPad4 =
  prove
   (``!r msg.
-      2 < r 
-      /\ 
-      ~(LENGTH msg MOD r = r - 1 ) 
+      2 < r
+      /\
+      ~(LENGTH msg MOD r = r - 1 )
       /\
       (LENGTH(msg ++ [T] ++ Zeros n ++ [T]) MOD r = 0)
       ==>
@@ -549,7 +549,7 @@ val LeastPad =
  store_thm
   ("LeastPad",
    ``!r msg.
-      2 < r 
+      2 < r
       ==>
       (LENGTH(msg ++ [T] ++ Zeros(PadZeros r msg) ++ [T]) MOD r = 0)
       /\
@@ -571,8 +571,8 @@ being shorter if the r doesn't divide exactly into the block length.
 val Split_def =
  tDefine
   "Split"
-  `Split r msg = 
-    if (r = 0) \/ LENGTH msg <= r 
+  `Split r msg =
+    if (r = 0) \/ LENGTH msg <= r
      then [msg]
      else TAKE r msg :: Split r (DROP r msg)`
   (WF_REL_TAC `measure (LENGTH o SND)`
@@ -586,7 +586,7 @@ Sanity check:
 
  - each block has length shorter than r;
 
- - if there are more than one blocks in a message, 
+ - if there are more than one blocks in a message,
    then all except the last have length r;
 
  - the concatenation of the blocks is the original message.
@@ -614,9 +614,9 @@ Note that EL ((LENGTH l) - 1) l = LAST l as shown by:
 
 val SplitLengthsLemma1 =
  prove
-  (``!r msg n. 
+  (``!r msg n.
       n < PRE(LENGTH(Split r msg))
-      ==> 
+      ==>
       (LENGTH(EL n (Split r msg)) = r)``,
    recInduct(fetch "-" "Split_ind")
     THEN RW_TAC list_ss []
@@ -629,12 +629,12 @@ val SplitLengthsLemma1 =
       Cases_on `n`
        THEN RW_TAC list_ss []
        THEN `n' < PRE (LENGTH (Split r (DROP r msg))) ==>
-             (LENGTH (EL n' (Split r (DROP r msg))) = r)` 
+             (LENGTH (EL n' (Split r (DROP r msg))) = r)`
              by PROVE_TAC[]
-       THEN `Split r msg = TAKE r msg::Split r (DROP r msg)` 
+       THEN `Split r msg = TAKE r msg::Split r (DROP r msg)`
              by PROVE_TAC[Split_def]
        THEN FULL_SIMP_TAC list_ss []]);
- 
+
 val SplitLengthsLemma2 =
  prove
   (``!r msg. 0 < LENGTH(Split r msg)``,
@@ -654,8 +654,8 @@ val SplitLengthsLemma3 =
         THEN RW_TAC list_ss [],
       `r <> 0` by DECIDE_TAC
        THEN `LENGTH
-             (EL 
-               (PRE (LENGTH (Split r (DROP r msg)))) 
+             (EL
+               (PRE (LENGTH (Split r (DROP r msg))))
                (Split r (DROP r msg))) <= r`
              by PROVE_TAC[]
        THEN `Split r msg = TAKE r msg::Split r (DROP r msg)` by PROVE_TAC[Split_def]
@@ -712,7 +712,7 @@ val Absorb_def =
  Define
   `(Absorb f s ([]:'r word list)  = s)
    /\
-   (Absorb f (s: ('r+'c) word) (blk::blkl) = 
+   (Absorb f (s: ('r+'c) word) (blk::blkl) =
      Absorb f (f(s ?? (blk @@ 0w: 'c word))) blkl)`;
 
 (* Sanity check: relate Absorb to FOLDL *)
@@ -721,7 +721,7 @@ val Absorb_FOLDL =
   ("Absorb_FOLDL",
    ``Absorb (f: ('r+'c) word -> ('r+'c) word) = FOLDL (\s blk. f(s ?? (blk @@
    (0w: 'c word))))``,
-   RW_TAC std_ss [FUN_EQ_THM] 
+   RW_TAC std_ss [FUN_EQ_THM]
     THEN Q.SPEC_TAC(`x`,`s0`)
     THEN Q.SPEC_TAC(`x'`,`blkl`)
     THEN Induct
@@ -735,7 +735,7 @@ val Output_def =
   `Output: ('b) word -> 'n word s =
      ((dimindex(:'b)-1) >< (dimindex(:'b)-dimindex(:'n))) s`;
 
-val SplittoWords_def = 
+val SplittoWords_def =
   Define
   `(SplittoWords: bits -> 'r word list) bitlist  =
     (MAP BITS_TO_WORD) (Split (dimindex(:'r)) bitlist)`;
@@ -746,13 +746,13 @@ Hash a message
 *)
 val Hash_def =
  Define
-  `Hash f initial_state  msg = 
-    Output (Absorb f initial_state 
+  `Hash f initial_state  msg =
+    Output (Absorb f initial_state
        (SplittoWords (Pad ( dimindex(:'r) ) msg)
      : 'r word list  )
        )`;
 
-(* Example 
+(* Example
 val (r,c,n) = (``4``,``2``,``3``);
 val s = ``Zeros(r+c)``;
 

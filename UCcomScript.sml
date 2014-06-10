@@ -57,13 +57,13 @@ val ADV_WRAPPER_def =
 
 (* Compute next state of the network from the perspective of the environment,
 * given a message on the network addressed to the protocol or adversary.
-* 
+*
 * Parameters:
 * p -- step function for protocol
 * a -- step function for advwersary
 * Input:
 * state_p -- current protocol state
-* state_a -- current adversary state 
+* state_a -- current adversary state
 * message to be routed
 * Output:
 * the adversary's and the protocols next state
@@ -73,26 +73,26 @@ val ADV_WRAPPER_def =
 val ROUTE_def =
  Define
   `
-     (ROUTE p a ((state_p,state_a),(EnvtoP m)) = 
+     (ROUTE p a ((state_p,state_a),(EnvtoP m)) =
           let (state_p_n, out) = p state_p (EnvtoP m)  in
           ((state_p_n, state_a),(PROTO_WRAPPER out)))
      /\
-     (ROUTE p a ((state_p,state_a),(AtoP m)) = 
+     (ROUTE p a ((state_p,state_a),(AtoP m)) =
           let (state_p_n, out) = p state_p (AtoP m)  in
           ((state_p_n, state_a),(PROTO_WRAPPER out)))
      /\
-     (ROUTE p a ((state_p,state_a),(EnvtoA m)) = 
+     (ROUTE p a ((state_p,state_a),(EnvtoA m)) =
           let (state_a_n, out) = a state_a (EnvtoA m)  in
           ((state_p, state_a_n),(ADV_WRAPPER out)))
      /\
-     (ROUTE p a ((state_p,state_a),(PtoA m)) = 
+     (ROUTE p a ((state_p,state_a),(PtoA m)) =
           let (state_a_n, out) = a state_a (PtoA m)  in
           ((state_p, state_a_n),(ADV_WRAPPER out)))
      /\
-     (ROUTE p a ((state_p,state_a),(PtoEnv m)) = 
+     (ROUTE p a ((state_p,state_a),(PtoEnv m)) =
           ((state_p, state_a),(PtoEnv m)))
      /\
-     (ROUTE p a ((state_p,state_a),(AtoEnv m)) = 
+     (ROUTE p a ((state_p,state_a),(AtoEnv m)) =
           ((state_p, state_a),(AtoEnv m)))
      `;
 
@@ -124,14 +124,14 @@ val ENV_WRAPPER_def =
 (* Given an input from the environment, compute the out from protocol and
  * adversary to the environment. We compute the routing only up to a depth of
  * three. If this is not enough, the environment is notified of a routing
- * error. 
+ * error.
  *)
 val EXEC_STEP_def =
     Define
     `
-        EXEC_STEP p a ((state_p,state_a),input) = 
-        let 
-          ((state_p_n,state_a_n),out) =  
+        EXEC_STEP p a ((state_p,state_a),input) =
+        let
+          ((state_p_n,state_a_n),out) =
           ROUTE_THREE p a ((state_p,state_a),(ENV_WRAPPER input))
         in
           case out of
