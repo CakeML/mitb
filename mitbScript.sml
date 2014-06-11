@@ -1338,27 +1338,46 @@ val mac_message_lemma = prove (
     )
   ) (* LENGTH msg > dimindex*:'r) *)
   >>
-   qpat_abbrev_tac `R= dimindex(:'r) ` >>
-   rw [GoodParameters_def] >>
-   `R <> 0` by DECIDE_TAC >>
-   POP_ASSUM (fn tm => fs [tm]) >>
-   rfs [] >>
-   (* qpat_assum `~(LENGTH msg <= R)` (fn thm => fs [thm]) >> *)
-   (* lfs >> *)
-   cheat
-   (* worked quite well *)
-   (* fs [(Once Split_def) ] >> *)
-   (* lfs rws_macking >> *)
-   (* lfs [] >> *)
-   (* rfs [] >> *)
-   (*  lfs [PROCESS_MESSAGE_LIST_def, (Once Split_def)]  >> *)
-   (* `~(R=0)` by simp []  >> *)
-   (*  fs [] >> *)
-   (* ------------------------------- *)
-   (*  `(LENGTH (TAKE (dimindex(:'r)) msg)) = (dimindex (:'r))` *)
-   (*    by  first_assum (mp_tac o MATCH_MP listTheory.LENGTH_TAKE) *)
-   (*    simp [] *)
-    );
+   ntac 4 strip_tac >>
+   SIMP_TAC std_ss [(Once Split_def)] >>
+   fs [GoodParameters_def] >>
+   last_assum (fn t => lfs [t] >> assume_tac t) >>
+   simp  (rws_macking) >>
+   qpat_abbrev_tac `head=TAKE (dimindex(:'r)) msg` >> 
+   qpat_abbrev_tac `rest=DROP (dimindex(:'r)) msg` >> 
+   `LENGTH (rest) > 0` by simp [Abbr`rest`,LENGTH_DROP] >>
+   `!a . PROCESS_MESSAGE_LIST a <> []:'r mitb_inp list` by 
+          (Cases  >> rw[PROCESS_MESSAGE_LIST_def] ) >>
+   pop_assum (qspec_then `Split (dimindex(:'r)) rest` (fn t => simp[t]))
+   >>
+   qpat_assum `!pmem vmem. P` (fn t => disch_then (assume_tac o MATCH_MP
+   t)) >>
+   fs [] >>
+   (* now we only have to argue about vmem *)
+   qmatch_abbrev_tac `LHS = RHS` >> simp [Abbr`RHS`] >>
+   simp [SplittoWords_def, (Once Split_def)] >>
+   qpat_abbrev_tac `pad_rest = (DROP (dimindex(:'r)) (Pad
+   (dimindex(:'r)) msg))` >>
+   simp [Pad_def] >>
+   simp rws_hash >>
+   `!x . TAKE (dimindex(:'r)) (msg++x) = TAKE (dimindex(:'r)) msg`
+      by simp [TAKE_APPEND1] >>
+   pop_assum (fn t => RW_TAC arith_ss  [GSYM APPEND_ASSOC,t])  >>
+   simp [Abbr`LHS`,ZERO_def] >> 
+   qmatch_abbrev_tac `(Absorf f (f (vmem ?? 0w @@ BITS_TO_WORD
+   head)) a ) = (Absorf f (f (vmem ?? 0w @@ BITS_TO_WORD
+   head)) b )` >>
+   qsuff_tac `a=b` >> simp [] >>
+   rw [Abbr`a`,Abbr`b`,SplittoWords_def]  >>
+   qsuff_tac `Pad (dimindex(:'r)) rest = pad_rest` >> simp [] >>
+   rw [Abbr`rest`,Abbr`pad_rest`,Pad_def]  >>
+   RW_TAC arith_ss  [GSYM APPEND_ASSOC,Pad_def] >>
+   qmatch_abbrev_tac `(DROP (dimindex(:'r)) msg ++ X)
+    = (DROP (dimindex(:'r)) (msg ++ Y))` >>
+   simp [DROP_APPEND1,Abbr`X`,Abbr`Y`] >>
+   simp [PadZerosLemma, SUB_MOD] 
+);
+
 
 (* We want to show this thing actually *)
 (* TODO use prev. lemma to  show this *)
