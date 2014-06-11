@@ -344,7 +344,7 @@ two.
 *)
 val padding_lemma = prove (
 ``
-!m. 
+!m.
 (LENGTH(m) < dimindex(:'r)-1)
 ==>
 ( 2 < dimindex(:'r))
@@ -1298,7 +1298,7 @@ val mac_message_lemma = prove (
       fsrw_tac [ARITH_ss] rws_macking >>
       (* now cntl_t, pmem_t and vmem_t are determined *)
       `LENGTH msg MOD dimindex(:'r) <> dimindex(:'r)-1` by simp [] >>
-      lrw [Pad_def,PadZerosLemma] >> 
+      lrw [Pad_def,PadZerosLemma] >>
       qpat_abbrev_tac `block = msg ++ [T] ++ (Zeros (dimindex(:'r) - (LENGTH msg +
       2))) ++ [T]` >>
       `LENGTH block = dimindex(:'r)` by simp [Abbr`block`,LengthZeros] >>
@@ -1306,24 +1306,37 @@ val mac_message_lemma = prove (
       qpat_abbrev_tac `block2=(PAD_WORD (LENGTH msg) ‖ (LENGTH msg − 1 -- 0)
       (BITS_TO_WORD msg)):'r word` >>
       qsuff_tac `block2 = (BITS_TO_WORD block)` 
-      >- disch_then (fn thm => rw [ZERO_def,thm]) 
-      rw [Abbr`block2`,ZERO_def] >>
+      >- disch_then (fn thm => rw [ZERO_def,thm])
+      >> rw [Abbr`block2`,ZERO_def] >>
       (* Can this be done in a quicker way? BEGIN*)
       first_assum (assume_tac o MATCH_MP padding_lemma) >>
-      pop_assum (fn t => 
+      pop_assum (fn t =>
          `2 < dimindex(:'r)` by simp [] >>
-         pop_assum (assume_tac o (MATCH_MP t)))
-      pop_assum (fn t => 
+         pop_assum (assume_tac o (MATCH_MP t))) >>
+      pop_assum (fn t =>
         `LENGTH msg <> 0 ` by simp [] >>
-         pop_assum (assume_tac o SYM o (MATCH_MP t)))
+         pop_assum (assume_tac o SYM o (MATCH_MP t))) >>
       (* END *)
-      fs [Abbr`block2`,Abbr`block`] >>
+      fs [Abbr`block`] >>
       pop_assum (fn t => ALL_TAC) >>
       simp [] >>
-      qpat_abbrev_tac `Z=Zeros (dimindex(:'r) - (LENGTH msg +2))` 
-      qsuff_tac `msg ++ T::Z = msg ++ [T] ++ Z` >>
-      >- disch_then (fn t => rw [t]) 
-      >> rw [CONS_APPEND] 
+      qpat_abbrev_tac `Z=Zeros (dimindex(:'r) - (LENGTH msg +2))`  >>
+      qsuff_tac `msg ++ T::Z = msg ++ [T] ++ Z`
+      >- disch_then (fn t => rw [t])
+      >> rw [CONS_APPEND]
+    )
+    >> (* LENGTH msg = 0 *)
+    (
+      `LENGTH msg <> dimindex(:'r) -1` by simp [] >>
+      fsrw_tac [ARITH_ss] rws_macking >>
+      pop_assum (fn t => ALL_TAC) >>
+      (* now cntl_t, pmem_t and vmem_t are determined *)
+      pop_assum (assume_tac o SYM) >>
+      fs [LENGTH_NIL] >>
+      `LENGTH (Pad (dimindex(:'r)) []) = dimindex(:'r)` by simp [Pad_def,PadZerosLemma,LengthZeros] >>
+      rw  (rws_hash@[(Once Split_def),full_padding_lemma,ZERO_def])
+    )
+  ) (* LENGTH msg > dimindex*:'r) *)
   >>
    qpat_abbrev_tac `R= dimindex(:'r) ` >>
    rw [GoodParameters_def] >>
