@@ -257,6 +257,31 @@ val LENGTH_Zeros = store_thm("LENGTH_Zeros",
   Induct >> simp[Zeros_def])
 val _ = export_rewrites["LENGTH_Zeros"]
 
+val zero_splitting_lemma = store_thm("zero_splitting_lemma",
+``! n m . (m <= n) ==> ((Zeros n) = (Zeros m) ++ (Zeros (n-m)))``,
+  Induct_on `m`
+ >-
+  simp[Zeros_def]
+ >>
+ (
+  strip_tac >>
+  strip_tac >>
+  qpat_abbrev_tac `X = (Zeros n)` >>
+  qpat_abbrev_tac `Y = (Zeros (n - (SUC m)))` >>
+  PURE_REWRITE_TAC [(Once Zeros_def)] >>
+  qpat_assum `!n. p` ( assume_tac o (Q.SPEC `(n-1)` )) >>
+  rw [Abbr`Y`] >>
+  `(n - SUC m) = (n-1) - m` by simp [] >>
+  pop_assum (fn thm => rw [thm]) >>
+  `m <= n-1` by simp [] >>
+  pop_assum (fn thm => fs [thm]) >>
+  pop_assum (fn thm => rw [SYM thm]) >>
+  rw [Abbr`X`,(GSYM (CONJUNCT2 Zeros_def))] >>
+  `n>0` by simp [] >>
+  simp [ADD1]
+  )
+  );
+
 (*
 At every position, the bit in a word constructed using
 word_from_bin_list concides with the value at the same position in the
@@ -319,10 +344,11 @@ two.
 *)
 val padding_lemma = prove (
 ``
+!m. 
 (LENGTH(m) < dimindex(:'r)-1)
-/\
+==>
 ( 2 < dimindex(:'r))
-/\
+==>
 (LENGTH(m) <> 0 )
 ==>
 (
@@ -330,7 +356,7 @@ val padding_lemma = prove (
 =  ((LENGTH m)-1 -- 0 ) (BITS_TO_WORD m) || PAD_WORD (LENGTH m)
 )
 ``,
-strip_tac >>
+ntac 4 strip_tac >>
 qmatch_abbrev_tac`(BITS_TO_WORD ls) =  word` >>
 simp[GSYM WORD_EQ] >>
 rw [] >>
@@ -1267,6 +1293,37 @@ val mac_message_lemma = prove (
       rw [one_short_lemma, ZERO_def ] >>
       simp [Abbr`block2`,int_min_lemma]
     )
+    >- (* LENGTH msg < dimindex(:'r) -1 *)
+    (
+      fsrw_tac [ARITH_ss] rws_macking >>
+      (* now cntl_t, pmem_t and vmem_t are determined *)
+      `LENGTH msg MOD dimindex(:'r) <> dimindex(:'r)-1` by simp [] >>
+      lrw [Pad_def,PadZerosLemma] >> 
+      qpat_abbrev_tac `block = msg ++ [T] ++ (Zeros (dimindex(:'r) - (LENGTH msg +
+      2))) ++ [T]` >>
+      `LENGTH block = dimindex(:'r)` by simp [Abbr`block`,LengthZeros] >>
+      rw  (rws_hash@[(Once Split_def)]) >>
+      qpat_abbrev_tac `block2=(PAD_WORD (LENGTH msg) ‖ (LENGTH msg − 1 -- 0)
+      (BITS_TO_WORD msg)):'r word` >>
+      qsuff_tac `block2 = (BITS_TO_WORD block)` 
+      >- disch_then (fn thm => rw [ZERO_def,thm]) 
+      rw [Abbr`block2`,ZERO_def] >>
+      (* Can this be done in a quicker way? BEGIN*)
+      first_assum (assume_tac o MATCH_MP padding_lemma) >>
+      pop_assum (fn t => 
+         `2 < dimindex(:'r)` by simp [] >>
+         pop_assum (assume_tac o (MATCH_MP t)))
+      pop_assum (fn t => 
+        `LENGTH msg <> 0 ` by simp [] >>
+         pop_assum (assume_tac o SYM o (MATCH_MP t)))
+      (* END *)
+      fs [Abbr`block2`,Abbr`block`] >>
+      pop_assum (fn t => ALL_TAC) >>
+      simp [] >>
+      qpat_abbrev_tac `Z=Zeros (dimindex(:'r) - (LENGTH msg +2))` 
+      qsuff_tac `msg ++ T::Z = msg ++ [T] ++ Z` >>
+      >- disch_then (fn t => rw [t]) 
+      >> rw [CONS_APPEND] 
   >>
    qpat_abbrev_tac `R= dimindex(:'r) ` >>
    rw [GoodParameters_def] >>
