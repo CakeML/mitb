@@ -733,7 +733,7 @@ Extract digest from a state
 val Output_def =
  Define
   `Output: ('b) word -> 'n word s =
-     ((dimindex(:'b)-1) >< (dimindex(:'b)-dimindex(:'n))) s`;
+     ((dimindex(:'n)-1) >< 0) s`;
 
 val SplittoWords_def =
   Define

@@ -584,7 +584,7 @@ val MITB_STEP_def =
       ((cntl_n,pmem_n,vmem_n),
       (
       (cntl_n = Ready),
-      (if cntl_n = Ready then ((dimindex(:'n)-1 >< 0) vmem) else (ZERO:'n word )))
+      (if cntl_n = Ready then ((dimindex(:'n)-1 >< 0) vmem_n) else (ZERO:'n word )))
       )
     `;
 
@@ -1065,7 +1065,8 @@ val rws =
   [EXEC_STEP_def,LET_THM,ENV_WRAPPER_def,ROUTE_THREE_def,ROUTE_def,
    SIM_def,ADV_WRAPPER_def,DUMMY_ADV_def,PROTO_def,MITB_STEP_def,
    MITB_def,MITB_FUN_def,PROTO_WRAPPER_def,STATE_INVARIANT_def,FMAC_def,
-   STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def
+   STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def,
+   RunMITB_def
                                         ]
 
 
@@ -1148,6 +1149,9 @@ val PROCESS_MESSAGE_LIST_def= Define
            :: (PROCESS_MESSAGE_LIST tl))))
   `;
 
+val PROCESS_MESSAGE_LIST_neq_NIL = prove (
+  ``!a . PROCESS_MESSAGE_LIST a <> []:'r mitb_inp list``,
+          Cases  >> rw[PROCESS_MESSAGE_LIST_def]  );
 
 (* This lemma is useful for simplifying terms occuring in the padding *)
 val a_b_mod_a_lemma = prove (
@@ -1192,38 +1196,34 @@ vmem equals pmem after moving into Absorbing. Thus
 will equal Hash f ..  if composed right.
 *)
 
-val mac_message_lemma = prove (
-``! r m pmem vmem.
-   (
-   (r = dimindex(:'r))
-   /\
-   (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
-   )
-   ==>
-   (
-   (((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) =
-        RunMITB
-          (MITB_STEP: ('c,'n,'r)mitbstepfunction  f)
-          (Absorbing,pmem,vmem)
-         (PROCESS_MESSAGE_LIST
-              (Split (dimindex(:'r)) m)))
-    ==>
-    (
-    (( cntl_t=Ready)
-    /\
-    ( pmem_t = pmem )
-    /\
-    ( vmem_t = (Absorb f vmem
-       (SplittoWords (Pad ( dimindex(:'r) ) m))
-       )))))
-    ``,
+val mac_message_in_absorbing = prove (
+``! r m pmem vmem .
+  (
+  (r = dimindex(:'r))
+  /\
+  (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
+  )
+  ==>
+  (
+   RunMITB
+       (MITB_STEP: ('c,'n,'r)mitbstepfunction  f)
+       (Absorbing,pmem,vmem)
+       (PROCESS_MESSAGE_LIST
+       (Split (dimindex(:'r)) m))
+   =
+   ((Ready, pmem,
+      (Absorb f vmem (SplittoWords (Pad ( dimindex(:'r) ) m)))
+    ),
+    (T,Hash f vmem m)
+    )
+    )  ``,
    recInduct(Split_ind) >>
    strip_tac >> strip_tac >>
    Cases_on `(LENGTH msg) <= dimindex(:'r)`
    >-
    (
     simp [GoodParameters_def,(Once Split_def)] >>
-    (ntac 4 strip_tac) >>
+    (ntac 3 strip_tac) >>
     `Split (dimindex(:'r)) msg = [msg]`
       by (rw [(Once Split_def)]) >>
     `(dimindex(:'r) = LENGTH msg  )
@@ -1298,14 +1298,14 @@ val mac_message_lemma = prove (
       fsrw_tac [ARITH_ss] rws_macking >>
       (* now cntl_t, pmem_t and vmem_t are determined *)
       `LENGTH msg MOD dimindex(:'r) <> dimindex(:'r)-1` by simp [] >>
-      lrw [Pad_def,PadZerosLemma] >>
+      lrw [Hash_def,Pad_def,PadZerosLemma] >>
       qpat_abbrev_tac `block = msg ++ [T] ++ (Zeros (dimindex(:'r) - (LENGTH msg +
       2))) ++ [T]` >>
       `LENGTH block = dimindex(:'r)` by simp [Abbr`block`,LengthZeros] >>
       rw  (rws_hash@[(Once Split_def)]) >>
       qpat_abbrev_tac `block2=(PAD_WORD (LENGTH msg) ‖ (LENGTH msg − 1 -- 0)
       (BITS_TO_WORD msg)):'r word` >>
-      qsuff_tac `block2 = (BITS_TO_WORD block)` 
+      qsuff_tac `block2 = (BITS_TO_WORD block)`
       >- disch_then (fn thm => rw [ZERO_def,thm])
       >> rw [Abbr`block2`,ZERO_def] >>
       (* Can this be done in a quicker way? BEGIN*)
@@ -1321,9 +1321,9 @@ val mac_message_lemma = prove (
       pop_assum (fn t => ALL_TAC) >>
       simp [] >>
       qpat_abbrev_tac `Z=Zeros (dimindex(:'r) - (LENGTH msg +2))`  >>
-      qsuff_tac `msg ++ T::Z = msg ++ [T] ++ Z`
-      >- disch_then (fn t => rw [t])
-      >> rw [CONS_APPEND]
+      qsuff_tac `msg ++ T::Z = msg ++ [T] ++ Z` >>
+      TRY (disch_then (fn t => rw [t])) >>
+      rw [CONS_APPEND]
     )
     >> (* LENGTH msg = 0 *)
     (
@@ -1334,7 +1334,11 @@ val mac_message_lemma = prove (
       pop_assum (assume_tac o SYM) >>
       fs [LENGTH_NIL] >>
       `LENGTH (Pad (dimindex(:'r)) []) = dimindex(:'r)` by simp [Pad_def,PadZerosLemma,LengthZeros] >>
-      rw  (rws_hash@[(Once Split_def),full_padding_lemma,ZERO_def])
+      rw  (rws_hash@[(Once Split_def),full_padding_lemma,ZERO_def]) >>
+      qpat_abbrev_tac `block = T :: ((Zeros (dimindex(:'r) - 2)) ++
+      [T])` >>
+      `LENGTH block = dimindex(:'r)` by simp [Abbr`block`,LengthZeros] >>
+      rw ([full_padding_lemma, Abbr `block`, (Once Split_def),LengthZeros]@rws_hash)
     )
   ) (* LENGTH msg > dimindex*:'r) *)
   >>
@@ -1343,16 +1347,15 @@ val mac_message_lemma = prove (
    fs [GoodParameters_def] >>
    last_assum (fn t => lfs [t] >> assume_tac t) >>
    simp  (rws_macking) >>
-   qpat_abbrev_tac `head=TAKE (dimindex(:'r)) msg` >> 
-   qpat_abbrev_tac `rest=DROP (dimindex(:'r)) msg` >> 
+   qpat_abbrev_tac `head=TAKE (dimindex(:'r)) msg` >>
+   qpat_abbrev_tac `rest=DROP (dimindex(:'r)) msg` >>
    `LENGTH (rest) > 0` by simp [Abbr`rest`,LENGTH_DROP] >>
-   `!a . PROCESS_MESSAGE_LIST a <> []:'r mitb_inp list` by 
+   `!a . PROCESS_MESSAGE_LIST a <> []:'r mitb_inp list` by
           (Cases  >> rw[PROCESS_MESSAGE_LIST_def] ) >>
    pop_assum (qspec_then `Split (dimindex(:'r)) rest` (fn t => simp[t]))
    >>
-   qpat_assum `!pmem vmem. P` (fn t => disch_then (assume_tac o MATCH_MP
-   t)) >>
-   fs [] >>
+   (* qpat_assum `!pmem vmem. P` (fn t => qspecl_then [`pmem`,) >> *)
+   rw [Hash_def] >>
    (* now we only have to argue about vmem *)
    qmatch_abbrev_tac `LHS = RHS` >> simp [Abbr`RHS`] >>
    simp [SplittoWords_def, (Once Split_def)] >>
@@ -1363,11 +1366,15 @@ val mac_message_lemma = prove (
    `!x . TAKE (dimindex(:'r)) (msg++x) = TAKE (dimindex(:'r)) msg`
       by simp [TAKE_APPEND1] >>
    pop_assum (fn t => RW_TAC arith_ss  [GSYM APPEND_ASSOC,t])  >>
-   simp [Abbr`LHS`,ZERO_def] >> 
-   qmatch_abbrev_tac `(Absorf f (f (vmem ?? 0w @@ BITS_TO_WORD
-   head)) a ) = (Absorf f (f (vmem ?? 0w @@ BITS_TO_WORD
-   head)) b )` >>
-   qsuff_tac `a=b` >> simp [] >>
+   simp [Abbr`LHS`,ZERO_def] >>
+   qpat_abbrev_tac `a = (SplittoWords (Pad (dimindex (:ς)) rest)): 'r
+   word list` >>
+   qpat_abbrev_tac `b = (MAP BITS_TO_WORD (Split (dimindex (:ς))
+   pad_rest)): 'r word list` >>
+   (* qmatch_abbrev_tac `(Absorb f (f (vmem ?? 0w @@ BITS_TO_WORD *)
+   (* head)) a ) = (Absorb f (f (vmem ?? 0w @@ BITS_TO_WORD *)
+   (* head)) b )` >> *)
+   qsuff_tac `a=b` >> simp [Output_def] >>
    rw [Abbr`a`,Abbr`b`,SplittoWords_def]  >>
    qsuff_tac `Pad (dimindex(:'r)) rest = pad_rest` >> simp [] >>
    rw [Abbr`rest`,Abbr`pad_rest`,Pad_def]  >>
@@ -1375,36 +1382,42 @@ val mac_message_lemma = prove (
    qmatch_abbrev_tac `(DROP (dimindex(:'r)) msg ++ X)
     = (DROP (dimindex(:'r)) (msg ++ Y))` >>
    simp [DROP_APPEND1,Abbr`X`,Abbr`Y`] >>
-   simp [PadZerosLemma, SUB_MOD] 
+   simp [PadZerosLemma, SUB_MOD]
 );
 
 
-(* We want to show this thing actually *)
-(* TODO use prev. lemma to  show this *)
-(* `! r m . *)
-(*    ( *)
-(*    (r = dimindex(:'r)) *)
-(*    /\ *)
-(*    (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n))) *)
-(*    /\ *)
-(*    (((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) = *)
-(*         RunMITB *)
-(*           (MITB_STEP: ('c,'n,'r)mitbstepfunction  f) *)
-(*           (Ready,pmem,vmem) *)
-(*         ((F,T,inp,len) *)
-(*          :: (PROCESS_MESSAGE_LIST *)
-(*               (Split (dimindex(:'r)) m)) *)
-(*         ))) *)
-(*     ==> *)
-(*     (( cntl_t=Ready) *)
-(*     /\ *)
-(*     ( pmem_t = pmem ) *)
-(*     /\ *)
-(*     ( vmem_t = BITS_TO_WORD (Hash (dimindex(:'r), dimindex(:'c), dimindex(:'n)) *)
-(*             (WORD_TO_BITS o (f o BITS_TO_WORD )) *)
-(*             ( Zeros (dimindex(:'r) + dimindex(:'c))) m)) *)
-(*             ) *)
-(*     ` *)
+val mac_message_lemma = prove (
+``! r m .
+(
+  (r = dimindex(:'r))
+  /\
+  (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
+)
+==>
+(
+  ( RunMITB
+        (MITB_STEP: ('c,'n,'r)mitbstepfunction  f)
+        (Ready,pmem,vmem)
+      ((F,T,inp,len)
+        :: (PROCESS_MESSAGE_LIST
+            (Split (dimindex(:'r)) m))
+      ))
+  =
+  ((Ready, pmem,
+      (Absorb f pmem (SplittoWords (Pad ( dimindex(:'r) ) m)))
+    ),
+    (T,Hash f pmem m))
+)
+    ``,
+rw [] >>
+qpat_abbrev_tac `COMS = (PROCESS_MESSAGE_LIST (Split (dimindex(:'r)) m)):'r
+mitb_inp list` >>
+`COMS <> []` by rw [Abbr`COMS`, PROCESS_MESSAGE_LIST_neq_NIL ] >>
+simp rws >>
+rw [Abbr`COMS`]  >>
+(* Now in Absorbing state *)
+rw [mac_message_in_absorbing] 
+);
 
 
 
