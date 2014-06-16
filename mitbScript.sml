@@ -733,7 +733,8 @@ val PROTO_def =
           /\
           ( PROTO mitbf (s,F) (EnvtoP (Mac m)) =
           (* Bring MITB into Ready state *)
-           let (s0,(rdy0,dig0)) = mitbf (s,(T,F,(ZERO: 'r word),0)) in
+           let (s0,(rdy0,dig0)) = RunMITB mitbf s [(T,F,(ZERO: 'r
+           word),0)] in
            (* make sure that MITB is in Ready state *)
              let (sr,rdyr,digr) =
               ( if (rdy0=F) then
@@ -1008,59 +1009,18 @@ in
     PURE_REWRITE_RULE[markerTheory.Abbrev_def])
 end g
 
-(*
-The following two lemmas are used in the (uncomplete) proof for the
-Invariant_cor and Invariant_cntl below, but will substituted by a
-stronger lemma derived from put_in_ready_state_lemma, mac_message_lemma
-and
-
-TODO: When mitb_skip_lemma lemma is shown, reformulate PROTO so it
-uses PROCESS_MESSAGE_LIST (defined below) and then strengthen lemma so
-it defines vmem.
-lemma_proto_mac_cor_one_andahalf and lemma_proto_mac_cor_two are then
-obsolete.
-*)
-
-val lemma_proto_mac_cor_one_andahalf = prove (
- ``
- (ROUTE (PROTO mitbf) DUMMY_ADV state_inp = state_out) ⇒
- (state_inp = (((s,F),0),EnvtoP (Mac m)))
- ⇒
- (?dig foo bar .
- (state_out = (((foo,F),0),PtoEnv dig)))
- ``,
- rw [] >>
-    simp [ROUTE_def,PROTO_def, pairTheory.UNCURRY, PROTO_WRAPPER_def]
-    );
-
-val lemma_proto_mac_cor_two = prove (
- ``
- (ROUTE (PROTO (MITB_STEP f)) DUMMY_ADV state_inp = state_out) ⇒
- (state_inp = (((s,F),0),EnvtoP (Mac m)))
- ⇒
- (?dig foo bar .
- (state_out = ((((Ready,foo,bar),F),0),PtoEnv dig)))
- ``,
- rw [] >>
-    simp [ROUTE_def,PROTO_def, pairTheory.UNCURRY,
-    PROTO_WRAPPER_def] >>
-    (* simp [MITB_STEP_def, MITB_FUN_def] *)
-    cheat
-    );
 
 val rws =
   [EXEC_STEP_def,LET_THM,ENV_WRAPPER_def,ROUTE_THREE_def,ROUTE_def,
    SIM_def,ADV_WRAPPER_def,DUMMY_ADV_def,PROTO_def,MITB_STEP_def,
    MITB_def,MITB_FUN_def,PROTO_WRAPPER_def,STATE_INVARIANT_def,FMAC_def,
    STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def,
-   RunMITB_def
-                                        ]
-
+   RunMITB_def ];
 
 val mitb_skip_lemma =
   prove (
   ``
-    (((cntl',pmem',vmem'),(rdy,dig)) = RunMITB (MITB_STEP f) (cntl,pmem,vmem) [(T,b,inp,len)] )
+    (((cntl',pmem',vmem'),(rdy,dig)) = RunMITB (MITB_STEP:('c,'n,'r) mitbstepfunction f) (cntl,pmem,vmem) [(T,b,inp,len)] )
     ==>
     ( cntl=cntl')
     /\
@@ -1077,57 +1037,6 @@ split_all_control_tac >>
 fs [RunMITB_def, MITB_STEP_def, MITB_FUN_def, MITB_def] >>
 fsrw_tac [ARITH_ss] [LET_THM]
 );
-
-(*
-A certain chain of commands can be used to put the MITB into ready
-state.
-*)
-val put_in_ready_state_lemma = prove (
-``
-    (
-    (((cntl',pmem',vmem'),(rdy,dig)) =
-     let ((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) =
-        RunMITB (MITB_STEP f) (cntl,pmem,vmem) [(T,b,inp,len)]
-      in
-        if (rdy_t=F) then
-          RunMITB (MITB_STEP f) (cntl_t,pmem_t,vmem_t) [(F,T,inp2,len2)]
-        else
-          ((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t))
-     )
-    ==>
-    (
-    ( cntl'=Ready)
-    )
-    )
-    ``,
-    rw [LET_THM] >>
-    last_assum(PairCases_on_tm o rand o  rand o concl) >>
-    POP_ASSUM (ASSUME_TAC o SYM ) >>
-    first_assum(mp_tac o MATCH_MP mitb_skip_lemma) >>
-    rw [] >>
-    Cases_on `p3` >>
-    fs [] >>
-    fs [RunMITB_def, MITB_STEP_def, MITB_FUN_def, MITB_def] >>
-    fsrw_tac [ARITH_ss] [LET_THM]
-    );
-
-val put_in_ready_state_lemma_2 = prove (
-`` 
-? vmem' dig' .
-(let ((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) =
-  RunMITB (MITB_STEP f) (cntl,pmem,vmem) [(T,b,inp,len)]
-in
-  if (rdy_t=F) then
-    RunMITB (MITB_STEP f) (cntl_t,pmem_t,vmem_t) [(F,T,inp2,len2)]
-  else
-    ((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t))
-)
-= ((Ready,pmem,vmem'),(T,dig'))``,
-(* MARK *)
-cheat
-);
-
-
 
 (*
 PROCESS_MESSAGE_LIST: bits list -> 'r mitb_inp list
@@ -1189,16 +1098,17 @@ val rws_hash =
   Pad_def, Zeros_def, PadZeros_def,
   a_b_mod_a_lemma
    ]
+
 (*
 This lemma shows that the MACing step in the protocol is executed
 correctly, i.e., that the virtual memory after execution equals a
-properly computed hash,  given that the MITB was in ready state before
-(which can be established using put_in_ready_state_lemma).
+properly computed hash,  given that the MITB was in Absorbing state
+before.
 
-REMARK: During protocol excution, we will be able to establish that
+REMARK: In mac_message_in_ready_lemma, we will be able to establish that
 vmem equals pmem after moving into Absorbing. Thus
 (Absorb f vmem (SplittoWords (Pad ( dimindex(:'r) ) m)))
-will equal Hash f ..  if composed right.
+will equal Hash f .. for the truncated output, if composed right.
 *)
 
 val mac_message_in_absorbing = prove (
@@ -1391,13 +1301,9 @@ val mac_message_in_absorbing = prove (
 );
 
 
-val mac_message_lemma = prove (
-``! r m .
-(
-  (r = dimindex(:'r))
-  /\
+val mac_message_in_ready_lemma = prove (
+``! pmem vmem  m inp len .
   (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
-)
 ==>
 (
   ( RunMITB
@@ -1421,9 +1327,33 @@ mitb_inp list` >>
 simp rws >>
 rw [Abbr`COMS`]  >>
 (* Now in Absorbing state *)
-rw [mac_message_in_absorbing] 
+rw [mac_message_in_absorbing]
 );
 
+val mac_message_lemma = prove (
+``! m .
+  (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
+==>
+(
+( PROTO ( (MITB_STEP:('c,'n,'r) mitbstepfunction) f)
+   ((cntl,pmem,vmem),F) (EnvtoP (Mac m)) )
+ =
+ (((Ready, pmem, ZERO ),F),(Proto_toEnv (Hash f pmem m)))
+)
+    ``,
+rw [PROTO_def ]  >>
+split_all_pairs_tac >>
+first_assum (assume_tac o (MATCH_MP mitb_skip_lemma) o SYM) >>
+Cases_on `rdy0` >>
+fs [] >>
+simp []  >>
+first_assum (assume_tac o (MATCH_MP mac_message_in_ready_lemma)) >>
+`sr0=Ready` by fs [] >>
+rw [] >>
+pop_assum (fn t => fs [t]) >>
+rw [] >>
+lfs [RunMITB_def, MITB_STEP_def, MITB_def, MITB_FUN_def] >>
+rw []);
 
 (*
 Given that the complete invariant holds, the corruption part of
@@ -1556,7 +1486,7 @@ val Invariant_cntl = prove(
         ((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)))
         )
         ``,
-    rw[] >> 
+    rw[] >>
     `∃a b. (input = Env_toA a) ∨ (input = Env_toP b)` by (
       Cases_on`input` >> rw[]) >>
       rw[]
