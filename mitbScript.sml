@@ -714,6 +714,7 @@ Output:
 
 TODO: Will be simplified using RunMITB above.
 *)
+
 val PROTO_def =
     Define
           `
@@ -736,34 +737,20 @@ val PROTO_def =
            (* make sure that MITB is in Ready state *)
              let (sr,rdyr,digr) =
               ( if (rdy0=F) then
-                  (mitbf (s0,(F,T,(ZERO: 'r word),0)))
+                  RunMITB mitbf (s0) [(F,T,ZERO,0)]
                 else
                   (s0,rdy0,dig0)
               ) in
-                (* Split the message in pieces of length r or less
-                * apply mitb(s,F,F,m_i,|m_i|) to every state s and block m_i
-                * and use the resulting state for computation with the next
-                * block
-                *)
-                let sf =
-                 FOLDR (\blk. \state.
-                  let (si,rdyi,dgi) = mitbf
-                  (* TODO check if BITS to word preserves the endianness for the
-                  * last block *)
-                  (state,(F,F,BITS_TO_WORD(blk), (LENGTH blk))) in
-                    if (LENGTH blk) = dimindex(:'r)-1 then
-                      (* special case: we need to add an empty block for padding *)
-                      let (sl,rdyl,dgl) = mitbf (si,(F,F,(ZERO: 'r word), 0)) in
-                        sl
-                    else si
-                  ) sr (Split (dimindex(:'r)) m) in
-                (* let sf = AUX_FEED_MITB mitbf sr m in  *)
-                  (* learn digest by skipping *)
-                  let (s1,rdy1,digest) = mitbf (sf,(T,F, (ZERO: 'r word),0)) in
+                let (ss,rdys,digest) = ( RunMITB
+                  mitbf
+                  (sr)
+                  ((F,T,ZERO,0)
+                  :: (PROCESS_MESSAGE_LIST (Split (dimindex(:'r)) m))))
+                in
                   (* two consecutive moves to re-initialise vmem *)
-                  let (s2,rdy2,dig2) = mitbf (s1,(F,T, (ZERO: 'r word),0)) in
-                  let (s3,rdy3,dig3) = mitbf (s2,(F,T, (ZERO: 'r word),0)) in
-                    ((s3,F),(Proto_toEnv digest))
+                  let (sq,rdyq,digq) = RunMITB mitbf ss [(F,T,ZERO,0);
+                  (F,T,ZERO,0)] in
+                    ((sq,F),(Proto_toEnv digest))
           )
           /\
           ( PROTO mitbf (s,F) (EnvtoP (Corrupt)) =
@@ -1124,6 +1111,24 @@ val put_in_ready_state_lemma = prove (
     fsrw_tac [ARITH_ss] [LET_THM]
     );
 
+val put_in_ready_state_lemma_2 = prove (
+`` 
+? vmem' dig' .
+(let ((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t)) =
+  RunMITB (MITB_STEP f) (cntl,pmem,vmem) [(T,b,inp,len)]
+in
+  if (rdy_t=F) then
+    RunMITB (MITB_STEP f) (cntl_t,pmem_t,vmem_t) [(F,T,inp2,len2)]
+  else
+    ((cntl_t,pmem_t,vmem_t),(rdy_t,dig_t))
+)
+= ((Ready,pmem,vmem'),(T,dig'))``,
+(* MARK *)
+cheat
+);
+
+
+
 (*
 PROCESS_MESSAGE_LIST: bits list -> 'r mitb_inp list
 Given a list of bitstrings, PROCESS_MESSAGE_LIST produces a list of
@@ -1420,7 +1425,6 @@ rw [mac_message_in_absorbing]
 );
 
 
-
 (*
 Given that the complete invariant holds, the corruption part of
 the invariant holds in the next step.
@@ -1552,23 +1556,26 @@ val Invariant_cntl = prove(
         ((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)))
         )
         ``,
-    rw[] >>
-    `(cor_s = cor_r) /\ (cor_f = cor_r)` by
-      fs[STATE_INVARIANT_def, STATE_INVARIANT_COR_def] >>
+    rw[] >> 
     `∃a b. (input = Env_toA a) ∨ (input = Env_toP b)` by (
       Cases_on`input` >> rw[]) >>
       rw[]
       >- (* Input to Adv *)
       (
+       full_simp_tac bool_ss [ STATE_INVARIANT_def,
+       STATE_INVARIANT_CNTL_def, STATE_INVARIANT_COR_def,
+       GoodParameters_def] >>
       split_all_pairs_tac >>
-      split_all_control_tac >>
+      (* split_all_control_tac >> *)
       Cases_on `cor_f` >>
-      fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def] >>
+      Cases_on `cntl` >>
+      rw [] >>
       split_all_bools_tac >>
+      lfs rws >>
       fsrw_tac [ARITH_ss] rws >> rw[] >>
       BasicProvers.EVERY_CASE_TAC >>
       fsrw_tac [ARITH_ss] rws >> rw[] >>
-      fs [GoodParameters_def] >>
+
       `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >>
       fsrw_tac [ARITH_ss] rws
       )
