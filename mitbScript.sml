@@ -118,7 +118,7 @@ open numLib;
 open computeLib;
 open wordsTheory;
 open wordsLib;
-open UCcomTheory;
+open uccomTheory;
 open spongeTheory;
 open lcsymtacs;
 
@@ -651,12 +651,13 @@ FMAC
  ('r word # bool) # ('n word, 'n mac_to_adv_msg) ProtoMessage
  (* output to environment or adversary *)
 *)
+
 val FMAC_def =
     Define
           `
           ( FMAC (H: bits -> 'n word) (K,F)
               (EnvtoP (SetKey k:'r mac_query)) =
-              ((k,F),(Proto_toEnv 0w))
+              ((k,F),(Proto_toEnv (0w:'n word)))
           )
           /\
           ( FMAC H (K,F) (EnvtoP (Mac m)) =
@@ -694,6 +695,35 @@ val RunMITB_def =
        `;
 
 (*
+PROCESS_MESSAGE_LIST: bits list -> 'r mitb_inp list
+Given a list of bitstrings, PROCESS_MESSAGE_LIST produces a list of
+input queries to the MITB that will leave the MITB in ready state, with
+vmem set to the hash of the flattening of the input. This is used in the
+protocol definition below.
+*)
+val PROCESS_MESSAGE_LIST_def= Define
+`
+  (PROCESS_MESSAGE_LIST  [] =
+  ([(F,F,0w,0)]:'r mitb_inp list))
+  /\
+  (PROCESS_MESSAGE_LIST (hd::tl) =
+      if (LENGTH hd) = dimindex(:'r)-1 then
+        ([(F,F,(BITS_TO_WORD hd),(LENGTH hd));
+        (F,F,0w,0)])
+      else
+        (if (LENGTH hd) <  dimindex(:'r)-1 then
+          [ (F,F,(BITS_TO_WORD hd),(LENGTH hd)) ]
+        else
+          ((F,F,(BITS_TO_WORD hd),(LENGTH hd))
+           :: (PROCESS_MESSAGE_LIST tl))))
+  `;
+
+(* PROCESS_MESSAGE_LIST never outputs NIL *)
+val PROCESS_MESSAGE_LIST_neq_NIL = prove (
+  ``!a . PROCESS_MESSAGE_LIST a <> []:'r mitb_inp list``,
+          Cases  >> rw[PROCESS_MESSAGE_LIST_def]  );
+
+(*
 PROTO
 
 stepfunction defining the protocol. When used with a "correct" MITB (described by a step function), it implements FMAC.
@@ -711,8 +741,6 @@ Input:
  mac_query
 Output:
  bitstring
-
-TODO: Will be simplified using RunMITB above.
 *)
 
 val PROTO_def =
@@ -791,6 +819,7 @@ REMARK: We first define a step function for SIM, which is then used in a
 wrapper function that instantiates the adversarial interface of F as an
 oracle.
 *)
+
 val SIM_def =
   Define `
 (SIM (T,Ready,(vm:'n word) ,m) (EnvtoA (T,_,_,_)) = ((T,Ready,vm,m),(Adv_toEnv
@@ -867,60 +896,66 @@ val _ =
    ``: (('c,'r) mitb_state # bool) # num list ``);
 (*                           ^ corruption status *)
 
-val _ = type_abbrev ("sim_plus_ideal_game_state",
-   ``: (bits # bool) #('c,'r)  mitb_state ``);
-(*               ^ corruption status *)
 
-val _ = type_abbrev ("ideal_game_state", ``: (bits # bool) ``);
-(*                                 corruption status ^ *)
+val _ = type_abbrev ("fmac_state",
+   ``: ( 'r word # bool) ``);
+(* corruption status ^ *)
+
+val _ = type_abbrev ("proto_state",
+   ``: (('c,'r) mitb_state # bool)``);
+
 
 (* ('n,'r) real_message is *)
 val _ = type_abbrev ("real_message",
     ``: ('r mac_query, 'r mitb_inp,  'n word,
      'n mitb_out , 'n mitb_out ,'r mitb_inp ) Message ``);
 
+(* ('n,'r) ideal_message is *)
+val _ = type_abbrev ("ideal_message",
+    ``: ('r mac_query, 'r mitb_inp,  'n word,
+     'n mitb_out , 'n mitb_out , adv_to_mac_msg ) Message ``);
+
 (* ('n,'r) adv_message is *)
 val _ = type_abbrev ("adv_message",
     ``: (
-    'r mitb_inp,
-     'n mitb_out
+     'n mitb_out,
+    'r mitb_inp
      ) AdvMessage ``);
 
 val _ = type_abbrev ("env_message",
     ``: ('r mac_query, 'r mitb_inp  ) EnvMessage ``);
 
+val _ = type_abbrev ("real_proto_message",
+    ``: ('n word, 'n mitb_out  ) ProtoMessage ``);
+
+val _ = type_abbrev ("ideal_proto_message",
+    ``: ('n word, 'n mac_to_adv_msg  ) ProtoMessage ``);
+
 (*
 We instantiate the real world with the protocol using the MITB, given
 parameters and the compression function
 *)
-(* TODO Does not work I can't see why *)
-
-(* val REAL_DUMMY_ADV_def = *)
-(*   Define ` *)
-(*  REAL_DUMMY_ADV  _ (m : ('n,'r) real_message) *)
-(* = *)
-(*     (DUMMY_ADV 0 m)`; *)
-
-(* val MITB_GAME_def = *)
-(*     Define ` *)
-(*       MITB_GAME f *)
-(*         = *)
-(*        EXEC_STEP *)
-(*        ( PROTO ( (MITB_STEP:('c,'n,'r) mitbstepfunction) f)) *)
-(*        REAL_DUMMY_ADV *)
-(*         `; *)
-
-(*
+val MITB_GAME_def =
+    Define `
+     ( (MITB_GAME f):
+     (('c, 'r) proto_state # num) # 'r env_message ->
+     (('c, 'r) proto_state # num) # ('n word,'n mitb_out) GameOutput)
+        =
+       EXEC_STEP
+       ((PROTO ( (MITB_STEP:('c,'n,'r) mitbstepfunction) f))
+       : ('c,'r) proto_state -> ('n,'r) real_message
+         -> (('c,'r) proto_state) # 'n real_proto_message)
+         DUMMY_ADV
+        `;
 
 val ALMOST_IDEAL_GAME_def =
     Define `
-      (ALMOST_IDEAL_GAME (r,(c:num),(n:num)) (h: bits -> bits ) )
-      :
+      (ALMOST_IDEAL_GAME (h: bits -> 'n word ))
       =
-      EXEC_STEP ( FMAC (r,c,n) h) (SIM (r,c,n))
-      `
-      *)
-
+      EXEC_STEP
+      (FMAC h)
+      SIM
+      `;
 (*
 We define the invariant that is to be preserved after every
 invocation of the real world and the ideal world with the same inputs.
@@ -1015,6 +1050,7 @@ val rws =
    SIM_def,ADV_WRAPPER_def,DUMMY_ADV_def,PROTO_def,MITB_STEP_def,
    MITB_def,MITB_FUN_def,PROTO_WRAPPER_def,STATE_INVARIANT_def,FMAC_def,
    STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def,
+   ALMOST_IDEAL_GAME_def, MITB_GAME_def,
    RunMITB_def ];
 
 val mitb_skip_lemma =
@@ -1038,34 +1074,6 @@ fs [RunMITB_def, MITB_STEP_def, MITB_FUN_def, MITB_def] >>
 fsrw_tac [ARITH_ss] [LET_THM]
 );
 
-(*
-PROCESS_MESSAGE_LIST: bits list -> 'r mitb_inp list
-Given a list of bitstrings, PROCESS_MESSAGE_LIST produces a list of
-input queries to the MITB that will leave the MITB in ready state, with
-vmem set to the hash of the flattening of the input.
-
-PROCESS_MESSAGE_LIST will be used in a re-definition of the protocol.
-*)
-val PROCESS_MESSAGE_LIST_def= Define
-`
-  (PROCESS_MESSAGE_LIST  [] =
-  ([(F,F,0w,0)]:'r mitb_inp list))
-  /\
-  (PROCESS_MESSAGE_LIST (hd::tl) =
-      if (LENGTH hd) = dimindex(:'r)-1 then
-        ([(F,F,(BITS_TO_WORD hd),(LENGTH hd));
-        (F,F,0w,0)])
-      else
-        (if (LENGTH hd) <  dimindex(:'r)-1 then
-          [ (F,F,(BITS_TO_WORD hd),(LENGTH hd)) ]
-        else
-          ((F,F,(BITS_TO_WORD hd),(LENGTH hd))
-           :: (PROCESS_MESSAGE_LIST tl))))
-  `;
-
-val PROCESS_MESSAGE_LIST_neq_NIL = prove (
-  ``!a . PROCESS_MESSAGE_LIST a <> []:'r mitb_inp list``,
-          Cases  >> rw[PROCESS_MESSAGE_LIST_def]  );
 
 (* This lemma is useful for simplifying terms occuring in the padding *)
 val a_b_mod_a_lemma = prove (
@@ -1331,14 +1339,14 @@ rw [mac_message_in_absorbing]
 );
 
 val mac_message_lemma = prove (
-``! m .
-  (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
+``  (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
 ==>
 (
+(* ! m . *)
 ( PROTO ( (MITB_STEP:('c,'n,'r) mitbstepfunction) f)
-   ((cntl,pmem,vmem),F) (EnvtoP (Mac m)) )
+   ((cntl,pmem,vmem),F) (EnvtoP (Mac m) :('n,'r)real_message) )
  =
- (((Ready, pmem, ZERO ),F),(Proto_toEnv (Hash f pmem m)))
+ (((Ready, pmem, ZERO ),F), (Proto_toEnv (Hash f pmem m)))
 )
     ``,
 rw [PROTO_def ]  >>
@@ -1360,7 +1368,7 @@ Given that the complete invariant holds, the corruption part of
 the invariant holds in the next step.
 *)
 val Invariant_cor = prove(
- ``! f h
+ ``! f
      (* The MITB's state in the real game *)
      (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
      (* The functionality's state (cor_s is shared with Sim)*)
@@ -1368,20 +1376,22 @@ val Invariant_cor = prove(
       (* The simulator's state *)
       cor_s cntl_s vm_s m_s
       (* The environment's query *)
-      input.
+      (input: 'r env_message) .
         (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
         /\
         (STATE_INVARIANT ((cntl,pmem,vmem),cor_r)
         ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
       ==>
-      let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r) =
-      EXEC_STEP (PROTO (MITB_STEP f))
-      DUMMY_ADV ((((cntl,pmem,vmem),cor_r),0),input)
+      let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r: ('n word, 'n
+      mitb_out) GameOutput ) =
+         (MITB_GAME f) ((((cntl,pmem,vmem),cor_r),0),input)
       in
         (
-        let
-        (((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)),out_i) =
-           EXEC_STEP ( FMAC  h) SIM
+       let
+        (((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)),out_i: ('n word, 'n
+      mitb_out) GameOutput
+        ) =
+           (ALMOST_IDEAL_GAME (Hash f ZERO) )
                       (((k,cor_f),(cor_s,cntl_s,vm_s,m_s)),input)
         in
         (STATE_INVARIANT_COR ((cntl_n,pmem_n,vmem_n), cor_r_n)
@@ -1405,7 +1415,10 @@ val Invariant_cor = prove(
       fsrw_tac[ARITH_ss][] >>
       fs [GoodParameters_def] >>
       `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >>
-      fsrw_tac [ARITH_ss] rws
+      fsrw_tac [ARITH_ss] rws >>
+      (* some more cases left *)
+      BasicProvers.EVERY_CASE_TAC >>
+      fsrw_tac [ARITH_ss] rws >> rw[]
       )
     >> (*Input to protocol *)
     (
@@ -1424,18 +1437,10 @@ val Invariant_cor = prove(
       Cases_on `? m. b=(Mac m)`
         >-
         (
-          fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def] >>
-          (* we are here *)
-          fs[LET_THM] >>
-          last_assum(PairCases_on_tm o rand o rand o rand o lhs o concl) >>
-          first_assum(mp_tac o MATCH_MP
-            (GEN_ALL lemma_proto_mac_cor_one_andahalf)) >>
-          simp[] >> strip_tac >> fs[] >>
-          fs [ROUTE_def] >>
-          split_all_control_tac >>
-          split_all_pairs_tac >>
-          fsrw_tac [ARITH_ss] rws >> rw[] >>
-          simp []
+          lfs [MITB_GAME_def, EXEC_STEP_def, ROUTE_THREE_def,
+          ROUTE_def, ENV_WRAPPER_def] >>
+          first_assum(assume_tac o MATCH_MP mac_message_lemma) >>
+          fs rws
         )
         >>
         (
@@ -1458,87 +1463,78 @@ of the invariant holds in the next step.
 *)
 (* Fails currently *)
 val Invariant_cntl = prove(
- `` ! f h
-     (* The MITB's state in the real game *)
-     (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
-     (* The functionality's state (cor_s is shared with Sim)*)
-      k cor_f
-      (* The simulator's state *)
-      cor_s cntl_s vm_s m_s
-      (* The environment's query *)
-      input.
-        (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
-        /\
-        (STATE_INVARIANT ((cntl,pmem,vmem),cor_r)
-        ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
-      ==>
-      let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r) =
-      EXEC_STEP (PROTO (MITB_STEP f))
-      DUMMY_ADV ((((cntl,pmem,vmem),cor_r),0),input)
-      in
-        (
-        let
-        (((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)),out_i) =
-           EXEC_STEP ( FMAC  h) SIM
-                      (((k,cor_f),(cor_s,cntl_s,vm_s,m_s)),input)
-        in
-        (STATE_INVARIANT_CNTL ((cntl_n,pmem_n,vmem_n), cor_r_n)
-        ((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)))
-        )
-        ``,
+``! f
+  (* The MITB's state in the real game *)
+  (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
+  (* The functionality's state (cor_s is shared with Sim)*)
+  k cor_f
+  (* The simulator's state *)
+  cor_s cntl_s vm_s m_s
+  (* The environment's query *)
+  (input: 'r env_message) .
+    (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
+    /\
+    (STATE_INVARIANT ((cntl,pmem,vmem),cor_r)
+    ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
+  ==>
+  let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r: ('n word, 'n
+  mitb_out) GameOutput ) =
+      (MITB_GAME f) ((((cntl,pmem,vmem),cor_r),0),input)
+  in
+    (
+    let
+    (((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)),out_i: ('n word, 'n
+  mitb_out) GameOutput
+    ) =
+        (ALMOST_IDEAL_GAME (Hash f ZERO) )
+                  (((k,cor_f),(cor_s,cntl_s,vm_s,m_s)),input)
+    in
+    (STATE_INVARIANT_CNTL ((cntl_n,pmem_n,vmem_n), cor_r_n)
+    ((k_n,cor_f_n),(cor_s_n,cntl_s_n,vm_s_n,m_s_n)))
+    )
+``,
     rw[] >>
+    `(cor_s = cor_r) ∧ (cor_f = cor_r)` by
+      fs[STATE_INVARIANT_def, STATE_INVARIANT_COR_def] >>
     `∃a b. (input = Env_toA a) ∨ (input = Env_toP b)` by (
-      Cases_on`input` >> rw[]) >>
-      rw[]
-      >- (* Input to Adv *)
-      (
-       full_simp_tac bool_ss [ STATE_INVARIANT_def,
-       STATE_INVARIANT_CNTL_def, STATE_INVARIANT_COR_def,
-       GoodParameters_def] >>
+      Cases_on`input` >> rw[]) >> rw[]
+    >- (
       split_all_pairs_tac >>
-      (* split_all_control_tac >> *)
+      split_all_control_tac >>
       Cases_on `cor_f` >>
-      Cases_on `cntl` >>
-      rw [] >>
+      fs [STATE_INVARIANT_def, STATE_INVARIANT_CNTL_def] >>
       split_all_bools_tac >>
-      lfs rws >>
       fsrw_tac [ARITH_ss] rws >> rw[] >>
       BasicProvers.EVERY_CASE_TAC >>
       fsrw_tac [ARITH_ss] rws >> rw[] >>
-
+      fsrw_tac[ARITH_ss][] >>
+      fs [GoodParameters_def] >>
       `~(dimindex (:'r) <= 1 + (dimindex (:'r)-2))` by (simp []) >>
-      fsrw_tac [ARITH_ss] rws
+      fsrw_tac [ARITH_ss] rws >>
+      (* some more cases left *)
+      BasicProvers.EVERY_CASE_TAC >>
+      fsrw_tac [ARITH_ss] rws >> rw[]
       )
-      >> (* Input to Proto *)
+    >> (*Input to protocol *)
+    (
       Cases_on `cor_f`
       >-
       ( (* cor_f T  (proto ignores messages) *)
         split_all_pairs_tac >>
         split_all_control_tac >>
         Cases_on `b` >>
-        fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def, ROUTE_def, PROTO_def, PROTO_WRAPPER_def] >>
-        RULE_ASSUM_TAC EVAL_RULE >>
-        fs[STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def]
+        fs rws >>
+        RULE_ASSUM_TAC EVAL_RULE
       )
-      >> (* cor_f F *)
+      >> (*cor_f F *)
       (
-      fs [STATE_INVARIANT_def, STATE_INVARIANT_COR_def,
-      STATE_INVARIANT_CNTL_def ] >>
       Cases_on `? m. b=(Mac m)`
         >-
         (
-          fs [EXEC_STEP_def, ROUTE_THREE_def, ENV_WRAPPER_def] >>
-          (* we are here *)
-          fs[LET_THM] >>
-          last_assum(PairCases_on_tm o rand o rand o rand o lhs o concl) >>
-          first_assum(mp_tac o MATCH_MP
-            (GEN_ALL lemma_proto_mac_cor_two)) >>
-          simp[] >> strip_tac >> fs[] >>
-          fs [ROUTE_def] >>
-          split_all_control_tac >>
-          split_all_pairs_tac >>
-          fsrw_tac [ARITH_ss] rws >> rw[] >>
-          simp []
+          lfs [MITB_GAME_def, EXEC_STEP_def, ROUTE_THREE_def,
+          ROUTE_def, ENV_WRAPPER_def] >>
+          first_assum(assume_tac o MATCH_MP mac_message_lemma) >>
+          fs rws
         )
         >>
         (
@@ -1551,7 +1547,8 @@ val Invariant_cntl = prove(
           split_all_bools_tac >>
           fsrw_tac [ARITH_ss] rws >> rw[]
         )
-        )
+      )
+    )
 );
 
 val _ = export_theory();

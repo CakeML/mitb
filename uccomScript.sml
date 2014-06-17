@@ -2,11 +2,18 @@
 (* Formalization of a simplified version of UC's communication model  *)
 (**********************************************************************)
 
-open HolKernel Parse boolLib bossLib
-     listTheory rich_listTheory
-     arithmeticTheory Arith numLib computeLib;
+open HolKernel;
+open Parse;
+open Arith;
+open boolLib;
+open bossLib;
+open listTheory;
+open rich_listTheory;
+open arithmeticTheory;
+open numLib;
+open computeLib;
 
-val _ = new_theory "UCcom";
+val _ = new_theory "uccom";
 
 (* Datatype for messages sent between protocol, environment and attacker *)
 val _ =
@@ -18,7 +25,6 @@ val _ =
           | PtoA of 'd
           | AtoEnv of 'e
           | AtoP of 'f
-          | RoutingError
           `;
 
 (* To make sure the protocol can only send messages of type PtoA or PtoEnv, we
@@ -60,7 +66,7 @@ val ADV_WRAPPER_def =
 *
 * Parameters:
 * p -- step function for protocol
-* a -- step function for advwersary
+* a -- step function for adversary
 * Input:
 * state_p -- current protocol state
 * state_a -- current adversary state
@@ -70,10 +76,18 @@ val ADV_WRAPPER_def =
 * message resulting from computation *unless* input message was already adresses
 * to envinronment (then ROUTE computes identity)
 *)
+(* ('a,'b,'c,'d,'e,'f, 'p, 'q) route_func is *)
+val _ = type_abbrev ("routefunc", 
+``: ('p -> ('a,'b,'c,'d,'e,'f) Message -> ('p # ('c,'d) ProtoMessage)) (* p *)
+->('q -> ('a,'b,'c,'d,'e,'f) Message -> ('q # ('e,'f)AdvMessage)) (* a *)
+->('p#'q) # ('a,'b,'c,'d,'e,'f) Message
+->('p#'q) # ('a,'b,'c,'d,'e,'f) Message ``);
+
 val ROUTE_def =
  Define
   `
-     (ROUTE p a ((state_p,state_a),(EnvtoP m)) =
+    ((ROUTE: ('a,'b,'c,'d,'e,'f, 'p, 'q) routefunc)
+     p a ((state_p,state_a),(EnvtoP m)) =
           let (state_p_n, out) = p state_p (EnvtoP m)  in
           ((state_p_n, state_a),(PROTO_WRAPPER out)))
      /\
@@ -98,15 +112,13 @@ val ROUTE_def =
 
 (* Execute routing algorithm up to a depth of 3 *)
 val ROUTE_THREE_def =
-  (* Old def, looks nicer, but difficult to deal with in proof *)
-  (*
- Define
-   ` ROUTE_THREE p a  = ((ROUTE p a) o (ROUTE p a) o (ROUTE p a)) `;
-   *)
  Define
    ` ROUTE_THREE p a (s,m) = (ROUTE p a) (
                          (ROUTE p a) (
                           (ROUTE p a) (s,m))) `;
+  (* Old def, looks nicer, but difficult to deal with in proof
+ Define ` ROUTE_THREE p a  = ((ROUTE p a) o (ROUTE p a) o (ROUTE p a)) `;
+   *)
 
 val _ =
  Hol_datatype
@@ -114,6 +126,7 @@ val _ =
            Env_toP of 'a
           | Env_toA of 'b
           `;
+
 val ENV_WRAPPER_def =
  Define
  `
@@ -121,6 +134,26 @@ val ENV_WRAPPER_def =
     /\
     (ENV_WRAPPER (Env_toA m) = (EnvtoA m))
     `;
+
+val _ =
+ Hol_datatype
+  `GameOutput =
+           OutputfromP of 'c
+          | OutfromA of 'e
+          | RoutingError
+          `;
+
+val GAME_OUT_WRAPPER_def =
+ Define
+ `
+    (GAME_OUT_WRAPPER (PtoEnv m) = (OutputfromP m))
+    /\
+    (GAME_OUT_WRAPPER (AtoEnv m) = (OutfromA m))
+    /\
+    (GAME_OUT_WRAPPER (_) = RoutingError)
+    `;
+
+
 (* Given an input from the environment, compute the out from protocol and
  * adversary to the environment. We compute the routing only up to a depth of
  * three. If this is not enough, the environment is notified of a routing
@@ -132,16 +165,14 @@ val EXEC_STEP_def =
         EXEC_STEP p a ((state_p,state_a),input) =
         let
           ((state_p_n,state_a_n),out) =
-          ROUTE_THREE p a ((state_p,state_a),(ENV_WRAPPER input))
+          (ROUTE_THREE : ('a,'b,'c,'d,'e,'f, 'p, 'q) routefunc)
+          p a ((state_p,state_a),(ENV_WRAPPER input))
         in
-          case out of
-              (PtoEnv m)=> ((state_p_n,state_a_n),out)
-             |(AtoEnv m)=> ((state_p_n,state_a_n),out)
-             |_ => ((state_p,state_a), RoutingError)
+              ((state_p_n,state_a_n),GAME_OUT_WRAPPER out)
     `
 
 (* Given protocol, adversary and their respective states, compute the output
- * of a list of command to the environment. *)
+ * of a list of commands to the environment. *)
 val EXEC_LIST_def =
  Define
  `(EXEC_LIST p a s [] = [] )
@@ -153,7 +184,7 @@ val EXEC_LIST_def =
       )
   `;
 
-(* Sanity check *)
+(* Sanity check
 
 val TEST_PROTO_def =
   Define
@@ -169,6 +200,7 @@ val TEST_ADV_def =
   `TEST_ADV s (PtoA 2) = (s,(Adv_toP 3))`;
 
 (* EVAL ``EXEC_LIST TEST_PROTO TEST_ADV (0,0) [Env_toP 1; Env_toP 5]``; *)
+*)
 
 val DUMMY_ADV_def =
   Define
