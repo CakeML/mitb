@@ -92,8 +92,9 @@ val WORD_TO_BITS_def=
   let
     bitstring_without_zeros =  MAP (\e.if e=1 then T else F) (word_to_bin_list w)
   in
-    ( Zeros (dimindex(:'l) - (LENGTH bitstring_without_zeros) )) ++
-    bitstring_without_zeros`;
+    bitstring_without_zeros
+    ++ (Zeros (dimindex(:'l) - (LENGTH bitstring_without_zeros))) `;
+
 
 val BITS_TO_WORD_def=
   Define
@@ -117,6 +118,65 @@ val ZerosOneToOne =
    Induct
     THEN Induct
     THEN RW_TAC list_ss [Zeros_def]);
+
+val LOG_2_POW_2_SHORT_1 =
+ store_thm
+  ("LOG_2_POW_2_SHORT_1", 
+``! L. L > 0 ==> ( LOG 2 (2 ** L -1) = L -1 )``,
+STRIP_TAC THEN STRIP_TAC 
+THEN ASSUME_TAC (Q.SPECL [`2`,`2**(L-1)-1`,`L-1`] logrootTheory.LOG_ADD )
+THEN FULL_SIMP_TAC arith_ss [logrootTheory.LOG_1,arithmeticTheory.EXP]
+THEN `2* 2 ** (L -1) -1 = 2**(SUC (L-1)) -1 ` by FULL_SIMP_TAC arith_ss [arithmeticTheory.EXP]
+THEN FULL_SIMP_TAC arith_ss [ADD1] 
+THEN `(L -1)+1  = L` by RW_TAC arith_ss []
+THEN FULL_SIMP_TAC arith_ss [ADD1] 
+);
+
+val LENGTH_w2l_le_dimindex =
+ store_thm
+  ("LENGTH_w2l_le_dimindex", ``! w.
+(dimindex(:'l)>1 )
+  ==> LENGTH (w2l 2 (w:'l word)) <= dimindex(:'l)``,
+STRIP_TAC
+THEN RW_TAC arith_ss [w2l_def] 
+THEN Cases_on `(w2n w)=0`
+THEN RW_TAC arith_ss [numposrepTheory.LENGTH_n2l]
+THEN ASSUME_TAC (Q.ISPEC `w: 'l word ` w2n_lt)
+THEN `SUC(LOG 2 (w2n w)) <= SUC (LOG 2 (dimword(:'l)-1))` 
+  by RW_TAC arith_ss [ logrootTheory.LOG_LE_MONO]
+THEN FULL_SIMP_TAC arith_ss [dimword_def]
+THEN Q.PAT_ABBREV_TAC `L = dimindex(:'l)`
+THEN `L > 0` by RW_TAC arith_ss []
+THEN POP_ASSUM (ASSUME_TAC o MATCH_MP (Q.SPEC `L` LOG_2_POW_2_SHORT_1))
+THEN (RW_TAC arith_ss [])
+);
+
+
+val LENGTH_WORD_TO_BITS =
+ store_thm
+  ("LENGTH_WORD_TO_BITS",
+   ``
+! w.   (dimindex(:'r)>1 )
+==>  ( LENGTH (WORD_TO_BITS (w:'r word)) = dimindex(:'r) )``,
+RW_TAC pure_ss [WORD_TO_BITS_def]
+THEN RW_TAC list_ss [Abbr`bitstring_without_zeros`, LengthZeros,word_to_bin_list_def]
+THEN Q.ISPEC_THEN `w` ASSUME_TAC LENGTH_w2l_le_dimindex 
+THEN FULL_SIMP_TAC arith_ss [] 
+    );
+
+val WORD_TO_BITS_NEQ_NIL =
+ store_thm
+  ("WORD_TO_BITS_NEQ_NIL",
+   ``
+! w.   (dimindex(:'r)>1 )
+==> ( ( WORD_TO_BITS (w:'r word)) <> [] )``,
+STRIP_TAC THEN STRIP_TAC
+THEN SPOSE_NOT_THEN ASSUME_TAC
+THEN FULL_SIMP_TAC list_ss [GSYM LENGTH_NIL]
+THEN FIRST_ASSUM ((Q.SPEC_THEN `w` ASSUME_TAC) o MATCH_MP LENGTH_WORD_TO_BITS)
+THEN FULL_SIMP_TAC list_ss []
+    );
+
 
 (*
 PadZeros r msg computes the smallest number n such that the length of
@@ -564,6 +624,16 @@ val LeastPad =
     THEN `r - 1 <= n` by PROVE_TAC[LeastPad2]
     THEN DECIDE_TAC);
 
+val Pad_APPEND =
+ store_thm
+  ("Pad_APPEND",
+`` (1 < r) /\  (LENGTH a = r )
+ ==>
+ (Pad r (a ++ b) = a ++ (Pad r b))``,
+  RW_TAC arith_ss [Pad_def, PadZerosLemma] 
+  THEN FULL_SIMP_TAC list_ss [ADD_MODULUS]
+ );
+
 (*
 Split a message into blocks of a given length r, with the last block
 being shorter if the r doesn't divide exactly into the block length.
@@ -577,7 +647,6 @@ val Split_def =
      else TAKE r msg :: Split r (DROP r msg)`
   (WF_REL_TAC `measure (LENGTH o SND)`
     THEN RW_TAC list_ss [LENGTH_DROP]);
-
 
 val Split_ind = (fetch "-" "Split_ind");
 
@@ -691,9 +760,9 @@ EVAL ``Split 4 (Pad 4 [m0;m1;m2;m3;m4;m5;m6;m7;m8;m9;m10;m11;m12])``;
 EVAL ``Split 4 (Pad 4 [m0;m1;m2;m3;m4;m5;m6;m7;m8;m9;m10;m11;m12;m13])``;
 *)
 
-val Split_APPEND =
+val Split_LENGTH_APPEND =
   store_thm
-  ("Split_APPEND",
+  ("Split_LENGTH_APPEND",
   ``!l1 l2.
   ( 0< LENGTH l1 )
   ==>
