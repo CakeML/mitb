@@ -262,6 +262,7 @@ val LENGTH_Zeros = store_thm("LENGTH_Zeros",
   Induct >> simp[Zeros_def])
 val _ = export_rewrites["LENGTH_Zeros"]
 
+
 val zero_splitting_lemma = store_thm("zero_splitting_lemma",
 ``! n m . (m <= n) ==> ((Zeros n) = (Zeros m) ++ (Zeros (n-m)))``,
   Induct_on `m`
@@ -573,10 +574,6 @@ cheat
 );
 
 
-
-
-
-
 val int_min_lemma = prove (
   ``
   (dimindex(:'n) > 0)
@@ -723,13 +720,13 @@ val _ =
           | Mac of bits
           | Corrupt
           `;
+
 (*
 Datatype for
 - responses from the library/protocol to the adversary (real
   world)
 - responses from the simulator to the environment (ideal world)
 or from the S.
-
 WasCorrupted is a notice that the environment decided to corrupt the
 library/protocal or functionality
 OracleResponse is the response to an Oracle Query
@@ -1274,11 +1271,6 @@ fs [] >>
 rw [a_mult_b_mod_a_lemma]
 );
 
-first_assum (ASSUME_TAC o SYM o (Q.SPECL [`a`,`b`]) o (MATCH_MP
-MOD_PLUS)) >>
-first_assum (ASSUME_TAC o CONJUNCT2 o (MATCH_MP DIVMOD_ID)) >>
-rw []);
-
 (*
 Rewrite system for what concerns the MACing procedure inside the
 protocol
@@ -1311,6 +1303,51 @@ val rws_hash_sans_split =
   Pad_def, Zeros_def, PadZeros_def, ZERO_def,
   a_mult_b_mod_a_lemma
    ];
+
+val non_zero_mult = prove(
+``!n a . ( n <> 0)  ==> (n * a >= a)``,
+Cases >> simp [] >> rw [MULT_SUC] >> simp []);
+
+val Split_APPEND = prove(
+``
+! r a b n.
+LENGTH a > 0 /\
+LENGTH b > 0 /\
+(LENGTH a = n * r)
+==> (Split r (a++b) = Split r a ++ Split r b)``,
+recInduct(Split_ind) >>
+rw [] >>
+qmatch_abbrev_tac `spab = spa  ++ spb` >> 
+`r<>0` by spose_not_then (fn t=> fs[t]) >>
+pop_assum (fn t=> fs[t] >> assume_tac t) >> 
+`n<>0` by spose_not_then (fn t=> fs[t]) >>
+`n*r >= r` by simp [non_zero_mult] >>
+`n*r + LENGTH b > r` by simp [] >>
+rw [Abbr`spab`,Abbr`spa`,(Once Split_def)] 
+>- lfs [] (*Contradictory case *)
+>> 
+`r <= LENGTH (msg)` by simp [] >>
+rw [TAKE_APPEND1] >>
+Cases_on `n<=1`
+>- (
+  `n=1` by simp [] >> 
+  `r=LENGTH msg` by simp [] >> 
+  rw [DROP_LENGTH_APPEND,TAKE_LENGTH_APPEND] >>
+  rw [(Once Split_def)] 
+)
+>>
+qpat_assum `P ==> !b n. Q` (* Invariant *)
+ (fn t => first_assum 
+ (assume_tac o Q.SPECL [`b`, `(n-1)`] o MATCH_MP t)) >>
+`n -1 <> 0` by simp[] >>
+ pop_assum (assume_tac o Q.SPEC `r` o MATCH_MP non_zero_mult) >>
+ `n * r > r` by simp [] >>
+ `n* r -r = (n-1)*r` by simp [] >>
+ res_tac >>
+ rw [DROP_APPEND1] >>
+ qmatch_abbrev_tac `lhs=rhs` >> qunabbrev_tac `rhs` >>
+ rw [(Once Split_def)]
+);
 
 (*
 This lemma shows that the MACing step in the protocol is executed
@@ -1379,11 +1416,15 @@ val mac_message_in_absorbing = prove (
       pop_assum (fn thm => ALL_TAC) >>
       pop_assum (fn thm => ALL_TAC) >>
       `LENGTH (zeroblock) = LENGTH msg` by simp [LengthZeros,Abbr`zeroblock`] >>
+      `LENGTH (msg ++ zeroblock) > LENGTH (msg)` by simp [] >>
+      RW_TAC arith_ss  [ (Once Split_def) ] >>
+      rw [DROP_LENGTH_APPEND, TAKE_LENGTH_APPEND] >>
+      rw rws_hash >>
       RW_TAC arith_ss  [ (Once Split_def) ] >>
       rw rws_hash >>
       qpat_assum `dimindex(:'r) = LENGTH (msg)`
         (fn thm => assume_tac (SYM thm)) >>
-      simp [Abbr`zeroblock`,full_padding_lemma, ZERO_def ]
+      simp [ Abbr`zeroblock`,full_padding_lemma, ZERO_def ]
     )
     >- (* LENGTH msg = dimindex(:'r)-1 *)
     (
@@ -2208,50 +2249,7 @@ simp [(Once Split_def)] >>
 rw [DROP_LENGTH_APPEND,TAKE_LENGTH_APPEND]
 );
 
-val non_zero_mult = prove(
-``!n a . ( n <> 0)  ==> (n * a >= a)``,
-Cases >> simp [] >> rw [MULT_SUC] >> simp []);
 
-val Split_APPEND = prove(
-``
-! r a b n.
-LENGTH a > 0 /\
-LENGTH b > 0 /\
-(LENGTH a = n * r)
-==> (Split r (a++b) = Split r a ++ Split r b)``,
-recInduct(Split_ind) >>
-rw [] >>
-qmatch_abbrev_tac `spab = spa  ++ spb` >> 
-`r<>0` by spose_not_then (fn t=> fs[t]) >>
-pop_assum (fn t=> fs[t] >> assume_tac t) >> 
-`n<>0` by spose_not_then (fn t=> fs[t]) >>
-`n*r >= r` by simp [non_zero_mult] >>
-`n*r + LENGTH b > r` by simp [] >>
-rw [Abbr`spab`,Abbr`spa`,(Once Split_def)] 
->- lfs [] (*Contradictory case *)
->> 
-`r <= LENGTH (msg)` by simp [] >>
-rw [TAKE_APPEND1] >>
-Cases_on `n<=1`
->- (
-  `n=1` by simp [] >> 
-  `r=LENGTH msg` by simp [] >> 
-  rw [DROP_LENGTH_APPEND,TAKE_LENGTH_APPEND] >>
-  rw [(Once Split_def)] 
-)
->>
-qpat_assum `P ==> !b n. Q` (* Invariant *)
- (fn t => first_assum 
- (assume_tac o Q.SPECL [`b`, `(n-1)`] o MATCH_MP t)) >>
-`n -1 <> 0` by simp[] >>
- pop_assum (assume_tac o Q.SPEC `r` o MATCH_MP non_zero_mult) >>
- `n * r > r` by simp [] >>
- `n* r -r = (n-1)*r` by simp [] >>
- res_tac >>
- rw [DROP_APPEND1] >>
- qmatch_abbrev_tac `lhs=rhs` >> qunabbrev_tac `rhs` >>
- rw [(Once Split_def)]
-);
 
 val SplittoWords_APPEND = prove(
 ``! a b n. 
