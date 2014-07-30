@@ -1158,7 +1158,14 @@ val STATE_INVARIANT_MEM_def =
      )
      /\
         (~cor_r ==>
-        (pmem = f(ZERO: 'c word @@ k)) )
+        (
+          (pmem = f(ZERO: 'c word @@ k))
+          /\
+          (vmem = ZERO)
+          /\
+          (vm_s = ZERO)
+        )
+        )
     `;
 
 (* The complete invariant (will grow in the future) *)
@@ -2410,7 +2417,7 @@ val Invariant_mem = prove(
             pop_assum (fn t => rw[t]) >>
             `SNDLASTBLOCK <> []` 
               by simp [Abbr`SNDLASTBLOCK`] >>
-            rw [SplittoWords2_def]
+            rw [SplittoWords2_def] >>
             qpat_abbrev_tac `PREV=Absorb f X (SplittoWords
             SNDLASTBLOCK)` >>
             (* Now we need to resolve the thing with the Zeros *)
@@ -2438,13 +2445,30 @@ val Invariant_mem = prove(
        fs rws >>
        qexists_tac `n` >>
        decide_tac
-       ) >>
+       )
+      >>
        Cases_on `b` 
        >- ( (* SetKey *)
          split_all_control_tac >>  fs [] >>
          split_all_bools_tac >> fs [] >>
-         fs rws >>
+         fs rws
          )
+       >- ( (* Mac *)
+          lfs [MITB_GAME_def, EXEC_STEP_def, ROUTE_THREE_def,
+          ROUTE_def, ENV_WRAPPER_def] >>
+          first_assum(assume_tac o MATCH_MP ( Q.GEN `m` mac_message_lemma)) >>
+          fs rws
+          )
+       >> ( (* Corrupt *)
+         split_all_control_tac >>  fs [] >>
+         split_all_bools_tac >> fs [] >>
+         fs rws >>
+         rw [Output_def] 
+         )
+);
+         
+         
+
        
 
 val _ = export_theory();
