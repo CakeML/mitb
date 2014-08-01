@@ -304,49 +304,6 @@ val word_bit_word_from_bin_list = store_thm("word_bit_word_from_bin_list",
   assume_tac DIMINDEX_GT_0 >>
   DECIDE_TAC);
 
-(* (* *)
-(* remove if unused *)
-(* *) *)
-(* val EL_word_to_bin_list = store_thm("word_bit_word_from_bin_list", *)
-(*   ``∀ b. *)
-(*   (dimindex(:'n) > 1) ==> *)
-(*   ( *)
-(*       word_bit b w = *)
-(*       (( b < LENGTH (word_to_bin_list (w:'n word))) *)
-(*        /\ *)
-(*        (EL b (word_to_bin_list (w:'n word)) = 1)) *)
-(*        )``, *)
-(* rw[word_to_bin_list_def] >> *)
-(* Q.ISPEC_THEN `w` assume_tac LENGTH_w2l_le_dimindex >> *)
-(* fs [w2l_def] >> *)
-(* Q.ISPECL_THEN [`2`,`w2n w`] assume_tac numposrepTheory.LENGTH_n2l  >> *)
-(* rw [] *)
-(* >- (Cases_on `b<1` >> simp [] >> `b=0` by simp [] >> rw []) *)
-(* >> *)
-(* Cases_on `b < LENGTH (n2l 2 (w2n w))` *)
-(* >- *)
-(* ( *)
-(*    rw [numposrepTheory.EL_n2l]   >> *)
-(*    `b < SUC (LOG 2 (w2n w))` by simp []  >> *)
-(*    rw [word_bit_def] >> *)
-(*    `b <= dimindex(:'n) -1` by simp [] >> *)
-(*    rw [] >> *)
-(*    cheat *)
-(*    (1* bitTheory.BITS_def *1) *)
-(*    (1* bitTheory.BIT_def *1) *)
-(*    (1* n2w_def *1) *)
-(*    (1* n2w_w2n *1) *)
-(*    (1* word_index *1) *)
-(*    (1* fcpTheory.FCP *1) *)
-(*    (1* fcpTheory.FCP_BETA *1) *)
-(* ) *)
-(* >> *)
-(* simp [word_bit_def]  >> *)
-(* (1* Does not help *1) *)
-(* cheat *)
-(* ); *)
-
-
 val l2n_APPEND = store_thm("l2n_APPEND",
 `` ! a c d.
 l2n b (c ++ d)  = (l2n b c) + (l2n b d) * b ** (LENGTH  c) ``,
@@ -1177,7 +1134,10 @@ val STATE_INVARIANT_def =
      (STATE_INVARIANT_CNTL (state_r) (state_f))
      /\
      (STATE_INVARIANT_MEM f (state_r) (state_f))
-        `;
+
+val rws_invariants =
+ [ STATE_INVARIANT_def, STATE_INVARIANT_COR_def,
+STATE_INVARIANT_CNTL_def,STATE_INVARIANT_MEM_def ];
 
 (* Tactics for different case splits *)
 fun split_all_pairs_tac (g as (asl,w)) =
@@ -1232,7 +1192,9 @@ end g
 
 
 val rws =
-[EXEC_STEP_def,LET_THM,ENV_WRAPPER_def,ROUTE_THREE_def,ROUTE_def,
+[EXEC_STEP_def,
+EXEC_LIST_FULL_def,
+LET_THM,ENV_WRAPPER_def,ROUTE_THREE_def,ROUTE_def,
   SIM_def,ADV_WRAPPER_def,DUMMY_ADV_def,PROTO_def,MITB_STEP_def,
   MITB_def,MITB_FUN_def,PROTO_WRAPPER_def,STATE_INVARIANT_def,FMAC_def,
   STATE_INVARIANT_COR_def, STATE_INVARIANT_CNTL_def,
@@ -1890,17 +1852,6 @@ rw [l2n_Zeros_helper] >>
 rw [GSYM w2l_def, GSYM l2w_def, l2w_w2l]
 );
 
-(* check if this can be deleted *)
-val change_name_lemma = prove(
-`` 
-BITS_TO_WORD
-  (TAKE (dimindex (:ς) − 1)
-     (WORD_TO_BITS ((dimindex (:ς) − 2 -- 0) w)))
-     = w:'r word 
-     ``,
-cheat);
-
-        
 val SplittoWords_WORD_TO_BITS = prove(
 ``
 dimindex(:'r)>1 ==>
@@ -2466,10 +2417,198 @@ val Invariant_mem = prove(
          rw [Output_def] 
          )
 );
-         
-         
 
-       
+         
+val  Initial_State_MITB_def =
+  Define `
+    (Initial_State_MITB f ((cntl,pmem,vmem),cor_r) ) =
+    (cntl = Ready) /\
+    (pmem = (f(((ZERO:'c word) @@ (ZERO:'r word)): ('r+'c)
+    word)):('r+'c) word ) /\
+    (vmem = ZERO) /\
+    (cor_r = F) 
+    `;
+
+val  Initial_State_ALMOST_IDEAL_def =
+  Define `
+    (Initial_State_ALMOST_IDEAL  ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)) =
+    (k = ZERO) /\
+    (cor_f = F) /\
+    (cor_s = F) /\
+    (cntl_s = Ready) /\
+    (vm_s = ZERO) /\
+    (m_s = []) 
+    )
+    `;
+
+val initial_state_fulfulls_invariant = prove(``
+! f (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
+  k cor_f cor_s cntl_s vm_s m_s
+  .
+    (Initial_State_MITB f  ((cntl,pmem,vmem),cor_r) )
+    /\
+    (Initial_State_ALMOST_IDEAL  ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
+    ==>
+    (STATE_INVARIANT f ((cntl,pmem,vmem),cor_r)
+    ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
+    ``,
+simp [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def, STATE_INVARIANT_def, STATE_INVARIANT_COR_def,
+STATE_INVARIANT_CNTL_def,STATE_INVARIANT_MEM_def]);
+
+(* Hash_WORD_TO_BITS_KEY fascilitates the proof of same_output.
+ I couldn't figure out how to introduce an existential in an assumption,
+ so I used this lemma instead.
+ *) 
+val simple_lemma = prove( ``? n . (n=0) \/ (dimindex(:'r) =0)``, 
+ qexists_tac `0` >> simp [] ) ;
+
+val Hash_WORD_TO_BITS_KEY = prove( ``
+GoodParameters(dimindex(:'r),dimindex(:'c), dimindex(:'n))
+==>
+(
+  ( (Hash f (s:('r+'c) word) (WORD_TO_BITS (k: 'r word) ++ l)):'n word)
+  =
+  (Hash f (f ( s ?? 0w:'c word @@ k)) (l))
+ )
+  ``,
+rw [Hash_def]  >>
+rw [Pad_def, PadZeros_def] >>
+qpat_abbrev_tac `Z1= Zeros X` >>
+qpat_abbrev_tac `Z2= Zeros X` >>
+qspecl_then [`s`,`k`,`[]`,`l++ [T] ++ Z1 ++ [T]`] assume_tac
+Absorb_SplittoWords >>
+`dimindex(:'r) >1`
+  by ( fs [GoodParameters_def] >> simp [] ) >>
+`LENGTH (l++ [T] ++ Z1 ++ [T])  > 0` by simp [] >>
+fs [simple_lemma] >>
+rw [SplittoWords2_def, Absorb_def] >>
+qunabbrev_tac `Z1` >>
+qunabbrev_tac `Z2` >>
+rw [LENGTH_WORD_TO_BITS] >>
+`dimindex(:'r)>0` by simp [GoodParameters_def] >>
+rw [GSYM ADD_ASSOC,a_mult_b_mod_a_lemma] 
+);
+
+
+val same_output = prove(
+``! f
+  (* The MITB's state in the real game *)
+  (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
+  (* The functionality's state (cor_s is shared with Sim)*)
+  k cor_f
+  (* The simulator's state *)
+  cor_s cntl_s vm_s m_s
+  (* The environment's query *)
+  (input: ('r env_message) list) 
+  (* Trace in the mitbgame *)
+  (mitb_trace: ((('c, 'r) proto_state # num) # ('n word,'n mitb_out)
+  GameOutput) list )
+  (* Trace in the almost ideal game *)
+  (alm_ideal_trace)
+  .
+    (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
+    /\
+    (Initial_State_MITB f  ((cntl,pmem,vmem),cor_r) )
+    /\
+    (Initial_State_ALMOST_IDEAL ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
+    /\
+    (mitb_trace = EXEC_LIST_FULL 
+      ((PROTO ( (MITB_STEP:('c,'n,'r) mitbstepfunction) f))
+       : ('c,'r) proto_state -> ('n,'r) real_message
+         -> (('c,'r) proto_state) # 'n real_proto_message)
+      DUMMY_ADV
+      (((cntl,pmem,vmem),cor_r),0)
+      input)
+    /\
+    (alm_ideal_trace = EXEC_LIST_FULL (FMAC (Hash f ZERO)) SIM
+                  ((k,cor_f),(cor_s,cntl_s,vm_s,m_s))
+                  input)
+    ==>
+    (
+    EVERY (\(((s1,_),o1),(s2,o2)). (STATE_INVARIANT f s1 s2) /\ (o1=o2) ) 
+      (ZIP (mitb_trace,alm_ideal_trace))
+    )
+``,
+Induct_on `input`
+>- (rw rws )
+>>
+rw [EXEC_LIST_FULL_def] >>
+rw [listTheory.EVERY_DEF]
+>- ( (* Show that property holds for the last elements *)
+qpat_assum `! f ctnl . X` (fn t=> all_tac)  >>
+      (* remove IH because we don't need it *)
+simp [LET_THM] >>
+Cases_on `s''` >>
+Cases_on `s'` >>
+simp [] >>
+qsuff_tac `STATE_INVARIANT f q (q',r')` 
+>- ( (*Show that if STATE_INVARIANT holds, output is equal, too *) 
+Cases_on `h`
+>- (
+  Cases_on `a`
+  >- ( (* SetKey *)
+    split_all_pairs_tac >>
+    fs rws_invariants >>
+    split_all_control_tac >> fs [] >>
+    split_all_bools_tac >> fs [] >>
+    fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
+    fs rws >>
+    rfs []
+  )
+  >- ( (* Mac *)
+    lfs [MITB_GAME_def, EXEC_STEP_def, ROUTE_THREE_def,
+    ROUTE_def, ENV_WRAPPER_def] >>
+    Cases_on `~cor_r` >>
+    first_assum((fn t => fs[t]) o MATCH_MP ( Q.GEN `m` mac_message_lemma)) >>
+    fs rws >>
+    split_all_pairs_tac >>
+    fs rws_invariants >>
+    split_all_control_tac >> fs [] >>
+    split_all_bools_tac >> fs [] >>
+    fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
+    fs rws >>
+    rw [Hash_WORD_TO_BITS_KEY]
+    )
+  >> (* Corrupt *)
+  (
+    split_all_pairs_tac >>
+    fs rws_invariants >>
+    split_all_control_tac >> fs [] >>
+    split_all_bools_tac >> fs [] >>
+    fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
+    fs rws >>
+    rfs []
+  )
+  )
+>>
+  Cases_on `b` >>
+  split_all_pairs_tac >>
+  fs rws_invariants >>
+  split_all_control_tac >> fs [] >>
+  split_all_bools_tac >> fs [] >>
+  fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
+  fs rws >>
+  rfs []
+)
+>> (* Use Invariant_cor Invariant_cntl Invariant_mem to show
+STATE_INVARIANT holds in the next step *)
+`STATE_INVARIANT f ((cntl,pmem,vmem),cor_r)
+((k,cor_f),cor_s,cntl_s,vm_s,m_s)`
+  by rw [initial_state_fulfulls_invariant] >>
+rw [STATE_INVARIANT_def] >>
+qpat_assum `A = ((q',r'),out)` (assume_tac o SYM) >>
+qpat_assum `A = ((q,r),out')` (assume_tac o SYM) >>
+split_all_pairs_tac >>
+fs [LET_THM] >>
+simp [] >>
+(* HERE *)
+cheat
+)
+>> (* Use Invariant_cor Invariant_cntl Invariant_mem to show
+STATE_INVARIANT holds in the next step *)
+cheat
+);
+
 
 val _ = export_theory();
 

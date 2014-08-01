@@ -184,6 +184,17 @@ val EXEC_LIST_def =
       )
   `;
 
+(* Given protocol, adversary and their respective states, compute the output
+ * of a list of commands to the environment. *)
+val EXEC_LIST_FULL_def =
+ Define
+ `(EXEC_LIST_FULL p a s [] = [] )
+   /\
+  (EXEC_LIST_FULL p a s (i :: il) =
+  let (s',out) =  EXEC_STEP p a (s,i)  in
+       ((s',out)::(EXEC_LIST_FULL p a s' il)))
+  `;
+
 (* Sanity check
 
 val TEST_PROTO_def =
