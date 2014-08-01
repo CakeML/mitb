@@ -1,5 +1,7 @@
-open HolKernel boolLib bossLib repl_computeLib repl_computeTheory ml_keccak_funTheory
+open HolKernel boolLib bossLib (* repl_computeLib repl_computeTheory *) ml_keccak_funTheory
 val _ = new_theory"compile_keccak_decs"
+
+(* This is all highly out of date
 
 val ct = ``init_compiler_state.contab``
 val m = ``<|bvars:=[];mvars:=FEMPTY;cnmap:=cmap(^ct)|>``
@@ -51,5 +53,6 @@ val x200 = doit 5 x100
 val (_,th) = x200;
 
 val _ = save_thm("keccak_decs_compiled", th);
+*)
 
 val _ = export_theory()
