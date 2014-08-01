@@ -148,18 +148,17 @@ val _ = type_abbrev("bits", ``:bool list``);
 (*
 Datatype of control states
 *)
-val _ =
- Hol_datatype
+val _ = Datatype
   `control = Ready | Absorbing | AbsorbEnd`;
 
 (*
 Datatype of input commands
 *)
 val _ =
- Hol_datatype
+ Datatype
   `command = Move
            | Skip
-           | Input of 'r word => num`;
+           | Input ('r word) num`;
 
 (*
 Type abbreviation for MITB states
@@ -296,7 +295,7 @@ original bitstring.
 val word_bit_word_from_bin_list = store_thm("word_bit_word_from_bin_list",
   ``∀ls b.
       EVERY ($> 2) ls ∧ b < LENGTH ls ⇒
-      (word_bit b ((word_from_bin_list ls):'a word) = b < dimindex (:'a) ∧ (EL b ls = 1))``,
+      (word_bit b ((word_from_bin_list ls):'a word) ⇔ b < dimindex (:'a) ∧ (EL b ls = 1))``,
   rw[word_from_bin_list_def,l2w_def,word_bit_n2w] >>
   rw[GSYM numposrepTheory.num_from_bin_list_def] >>
   rw[numposrepTheory.BIT_num_from_bin_list] >>
@@ -316,8 +315,8 @@ rw [] >> simp []
 );
 
 val BITS_TO_WORD_APPEND = store_thm("BITS_TO_WORD_APPEND",
-`` (BITS_TO_WORD (a++b):'r word )=
-(BITS_TO_WORD a:'r word) || ((BITS_TO_WORD b)<< (LENGTH a))``,
+``(BITS_TO_WORD (a++b):'r word ) =
+((BITS_TO_WORD a:'r word) || ((BITS_TO_WORD b)<< (LENGTH a)))``,
 rw [BITS_TO_WORD_def, word_from_bin_list_def,
     l2w_def] >>
 rw [l2n_APPEND] >>
@@ -336,7 +335,7 @@ translates from bool list. We have chosen the latter representation in
 spongeTheory, hence the "indirection".
 *)
 val word_bit_BITS_TO_WORD = store_thm("word_bit_BITS_TO_WORD",
-  ``∀ls x. x < LENGTH ls ⇒ (word_bit x ((BITS_TO_WORD ls):'a word) = x < dimindex (:'a) ∧ EL x ls)``,
+  ``∀ls x. x < LENGTH ls ⇒ (word_bit x ((BITS_TO_WORD ls):'a word) ⇔ x < dimindex (:'a) ∧ EL x ls)``,
   rw[BITS_TO_WORD_def] >>
   qmatch_abbrev_tac`word_bit x (word_from_bin_list l) ⇔ y` >>
   `EVERY ($> 2) l` by (
@@ -408,7 +407,7 @@ val PAD_WORD_def =
 
 (* The two following simplifications are used in padding_lemma *)
 val word_bit_or  = prove (
-`` (x < dimindex(:'a)) ==> ((a:'a word || b) ' x = a ' x \/ b ' x) ``,
+`` (x < dimindex(:'a)) ==> ((a:'a word || b) ' x ⇔ a ' x \/ b ' x) ``,
 rw [word_or_def] >>
 simp [fcpTheory.FCP_BETA] );
 
@@ -432,7 +431,7 @@ val padding_lemma = prove (
 ==>
 (
 (BITS_TO_WORD (m ++ (T::(Zeros (dimindex(:'r)-2-LENGTH (m)))++[T]))):'r word
-=  ((LENGTH m)-1 -- 0 ) (BITS_TO_WORD m) || PAD_WORD (LENGTH m)
+=  (((LENGTH m)-1 -- 0 ) (BITS_TO_WORD m) || PAD_WORD (LENGTH m))
 )
 ``,
 ntac 4 strip_tac >>
@@ -526,7 +525,7 @@ val one_short_lemma = prove (
 ==>
 (
 (BITS_TO_WORD (m ++ [T]) =
-((LENGTH m)-1 -- 0 ) (BITS_TO_WORD m) || PAD_WORD (LENGTH m) )
+ (((LENGTH m)-1 -- 0 ) (BITS_TO_WORD m) || PAD_WORD (LENGTH m) ))
 )
 ``,
 cheat
@@ -625,7 +624,7 @@ Predicate to test for well-formed Keccak parameters
 val GoodParameters_def =
  Define
   `GoodParameters (r:num,c:num,n:num)
-    = 2 < r /\ 0 < c /\ n <= r`;
+    ⇔ 2 < r /\ 0 < c /\ n <= r`;
 
 (*
 Functional version as in the paper
@@ -673,10 +672,10 @@ val MITB_STEP_def =
 Datatype of commands to the library/protocol calling the MITB
 *)
 val _ =
- Hol_datatype
+ Datatype
   `mac_query =
-            SetKey of 'r word
-          | Mac of bits
+            SetKey ('r word)
+          | Mac bits
           | Corrupt
           `;
 
@@ -702,10 +701,10 @@ Datatype for
 - queries from the simulator to the functionality (ideal world)
 *)
 val _ =
- Hol_datatype
+ Datatype
   `adv_to_mac_msg =
             CorruptACK
-          | OracleQuery of bits
+          | OracleQuery bits
           `;
 
 (*
@@ -1092,19 +1091,19 @@ val STATE_INVARIANT_MEM_def =
     STATE_INVARIANT_MEM f
     (((cntl:control),(pmem:('r+'c) word),(vmem:('r+'c)
     word)),(cor_r:bool))
-    ((k: 'r word,cor_f),(cor_s,cntl_s,(vm_s:'n word ),m_s))=
+    ((k: 'r word,cor_f),(cor_s,cntl_s,(vm_s:'n word ),m_s))⇔
     (cor_r ==>
         (
-        (pmem = f(ZERO: 'c word @@ k)) 
+        (pmem = f(ZERO: 'c word @@ k))
         /\
         ((cntl = Absorbing)(*no padding case *)
-         ==> 
+         ==>
          (? n. LENGTH m_s=n * dimindex(:'r))
          /\
          (vmem = Absorb f (f(ZERO: 'c word @@ k)) ( SplittoWords2 m_s) ))
         /\
         ((cntl = AbsorbEnd)(* half padding case *)
-         ==> 
+         ==>
          (? n. (LENGTH m_s=n * dimindex(:'r) - 1) /\ ( n>0))
          /\
          (vmem = Absorb f (f(ZERO:'c word @@ k ))
@@ -1128,12 +1127,12 @@ val STATE_INVARIANT_MEM_def =
 (* The complete invariant (will grow in the future) *)
 val STATE_INVARIANT_def =
   Define `
-  STATE_INVARIANT f (state_r) (state_f) =
+  STATE_INVARIANT f (state_r) (state_f) ⇔
      (STATE_INVARIANT_COR (state_r) (state_f))
      /\
      (STATE_INVARIANT_CNTL (state_r) (state_f))
      /\
-     (STATE_INVARIANT_MEM f (state_r) (state_f))
+     (STATE_INVARIANT_MEM f (state_r) (state_f))`
 
 val rws_invariants =
  [ STATE_INVARIANT_def, STATE_INVARIANT_COR_def,
@@ -1289,27 +1288,26 @@ LENGTH b > 0 /\
 ==> (Split r (a++b) = Split r a ++ Split r b)``,
 recInduct(Split_ind) >>
 rw [] >>
-qmatch_abbrev_tac `spab = spa  ++ spb` >> 
 `r<>0` by spose_not_then (fn t=> fs[t]) >>
-pop_assum (fn t=> fs[t] >> assume_tac t) >> 
+pop_assum (fn t=> fs[t] >> assume_tac t) >>
 `n<>0` by spose_not_then (fn t=> fs[t]) >>
 `n*r >= r` by simp [non_zero_mult] >>
 `n*r + LENGTH b > r` by simp [] >>
-rw [Abbr`spab`,Abbr`spa`,(Once Split_def)] 
+rw [(Once Split_def)]
 >- lfs [] (*Contradictory case *)
->> 
+>>
 `r <= LENGTH (msg)` by simp [] >>
 rw [TAKE_APPEND1] >>
 Cases_on `n<=1`
 >- (
-  `n=1` by simp [] >> 
-  `r=LENGTH msg` by simp [] >> 
+  `n=1` by simp [] >>
+  `r=LENGTH msg` by simp [] >>
   rw [DROP_LENGTH_APPEND,TAKE_LENGTH_APPEND] >>
-  rw [(Once Split_def)] 
+  rw [(Once Split_def)]
 )
 >>
 qpat_assum `P ==> !b n. Q` (* Invariant *)
- (fn t => first_assum 
+ (fn t => first_assum
  (assume_tac o Q.SPECL [`b`, `(n-1)`] o MATCH_MP t)) >>
 `n -1 <> 0` by simp[] >>
  pop_assum (assume_tac o Q.SPEC `r` o MATCH_MP non_zero_mult) >>
@@ -1774,7 +1772,7 @@ Invariant_mem *)
 val TAKE_Zeros = prove(
 ``! b a . TAKE a (Zeros (b)) = Zeros (MIN a b)``,
 Induct >>
-rw [MIN_DEF,Zeros_def] 
+rw [MIN_DEF,Zeros_def]
 >- decide_tac
 >- simp [GSYM Zeros_def,ADD1]
 >> fs [ADD1,ADD_COMM]
@@ -1799,8 +1797,8 @@ val LENGTH_n2n_w2n = prove (
 LENGTH (n2l 2 (w2n ((a − 1 -- 0) w:'r word))) ≤ a ``,
 rw [] >>
 Q.ISPECL_THEN [`a-1`,`0`,`w`] assume_tac WORD_BITS_LT >>
-Cases_on `(w2n ((a-1 -- 0) w)) = 0` 
->- ( 
+Cases_on `(w2n ((a-1 -- 0) w)) = 0`
+>- (
 `((a-1 -- 0) w) = 0w` by fs [w2n_eq_0] >>
 simp [] )
 >>
@@ -1813,8 +1811,8 @@ fs [] >>
 res_tac >>
 `LOG 2 (2**a -1) = a-1` by simp [LOG_2_POW_2_SHORT_1] >>
 fs [] >>
-pop_assum (fn t => all_tac) >> 
-`LENGTH (n2l 2 (w2n ((a-1 -- 0) w))) <= (a)` 
+pop_assum (fn t => all_tac) >>
+`LENGTH (n2l 2 (w2n ((a-1 -- 0) w))) <= (a)`
   by simp [numposrepTheory.LENGTH_n2l,ADD1]
 );
 
@@ -1823,7 +1821,7 @@ val MIN_DEF_ALT = prove (
 simp [MIN_DEF]);
 
 val BITS_TO_WORD_TAKE_WORD_TO_BITS = prove (
-`` 
+``
 !w a.
 (dimindex(:'r)>1 )
 /\
@@ -1847,7 +1845,7 @@ rw [TAKE_Zeros] >>
 <=
  (dimindex (:ς) − LENGTH (n2l 2 (w2n ((a − 1 -- 0) w))))`
  by simp [] >>
-rw [MIN_DEF_ALT, word_from_bin_list_def, l2w_def,l2n_APPEND ] >> 
+rw [MIN_DEF_ALT, word_from_bin_list_def, l2w_def,l2n_APPEND ] >>
 rw [l2n_Zeros_helper] >>
 rw [GSYM w2l_def, GSYM l2w_def, l2w_w2l]
 );
@@ -1859,7 +1857,7 @@ dimindex(:'r)>1 ==>
 rw [] >>
 `LENGTH (WORD_TO_BITS w) = dimindex(:'r)` by simp [LENGTH_WORD_TO_BITS] >>
 `dimindex(:'r) <>0` by simp [] >>
-rw [SplittoWords_def, (Once Split_def), BITS_TO_WORD_WORD_TO_BITS] 
+rw [SplittoWords_def, (Once Split_def), BITS_TO_WORD_WORD_TO_BITS]
 );
 
 val SplittoWords2_WORD_TO_BITS = prove(
@@ -1883,7 +1881,7 @@ rw [DROP_LENGTH_APPEND,TAKE_LENGTH_APPEND]
 );
 
 val SplittoWords_APPEND = prove(
-``! a b n. 
+``! a b n.
 (dimindex(:'r)>0)
 /\
 (LENGTH a >0 )
@@ -1892,32 +1890,32 @@ val SplittoWords_APPEND = prove(
 /\
 (LENGTH b > 0 )
 ==>
-(SplittoWords ( a ++ b):'r word list 
+(SplittoWords ( a ++ b):'r word list
   = (SplittoWords a) ++ (SplittoWords b) )``,
 rw [SplittoWords_def, SplittoWords_def] >>
 `n<>0` by spose_not_then (fn t => assume_tac t >> fs [LENGTH_NIL]) >>
 `n*dimindex(:'r) >= dimindex(:'r)` by simp [non_zero_mult] >>
 `LENGTH a > 0 ` by simp [] >>
-Q.ISPECL_THEN [`dimindex(:'r)`,`a`,`b`,`n`] assume_tac Split_APPEND >> 
+Q.ISPECL_THEN [`dimindex(:'r)`,`a`,`b`,`n`] assume_tac Split_APPEND >>
 fs []
 );
 
 val SplittoWords2_APPEND = prove(
-``! a b n. 
+``! a b n.
 (dimindex(:'r)>0)
 /\
 (LENGTH a = n * dimindex(:'r))
 /\
 (LENGTH b > 0 )
 ==>
-(SplittoWords2 ( a ++ b):'r word list 
+(SplittoWords2 ( a ++ b):'r word list
   = (SplittoWords2 a) ++ (SplittoWords2 b) )``,
 rw [SplittoWords2_def, SplittoWords_def] >>
 fs [] >>
 `n<>0` by spose_not_then (fn t => assume_tac t >> fs [LENGTH_NIL]) >>
 `n*dimindex(:'r) >= dimindex(:'r)` by simp [non_zero_mult] >>
 `LENGTH a > 0 ` by simp [] >>
-Q.ISPECL_THEN [`dimindex(:'r)`,`a`,`b`,`n`] assume_tac Split_APPEND >> 
+Q.ISPECL_THEN [`dimindex(:'r)`,`a`,`b`,`n`] assume_tac Split_APPEND >>
 fs []
 );
 
@@ -1937,7 +1935,7 @@ dimindex(:'r) > 1
 ((Absorb (f: ('r+'c) word -> ('r+'c) word )
    s ((SplittoWords: bits -> 'r word list)
      ((WORD_TO_BITS (k:'r word)) ++ m ++ more)))
-= (Absorb f (Absorb f (f (s ?? 0w:'c word @@ k)) (SplittoWords2 m))  
+= (Absorb f (Absorb f (f (s ?? 0w:'c word @@ k)) (SplittoWords2 m))
    (SplittoWords more )
   ))``,
   rw [] >>
@@ -2050,8 +2048,8 @@ val Invariant_mem = prove(
        split_all_control_tac >> fs [] >>
        split_all_bools_tac >> fs [] >>
        fs rws  >>
-       qexists_tac `n`  >> 
-       decide_tac 
+       qexists_tac `n`  >>
+       decide_tac
        )
       >>
       Cases_on `a1` (* mov bit *)
@@ -2079,7 +2077,7 @@ val Invariant_mem = prove(
              (a3< dimindex(:'r) -1 )` by simp []
            >-  (* (a3 > dimindex(:'r)) *)
            (
-           rfs rws  >> lfs rws >> qexists_tac `n` >> decide_tac  
+           rfs rws  >> lfs rws >> qexists_tac `n` >> decide_tac
            )
            >- (* (a3 = dimindex(:'r)) *)
            (
@@ -2110,39 +2108,39 @@ val Invariant_mem = prove(
            )
            >- (*  a3 = dimindex(:'r)-1  *)
            (
-            rfs rws >> 
+            rfs rws >>
             lfs ([GoodParameters_def]@rws) >>
             `dimindex(:'r) - 1 <> dimindex(:'r)` by simp [] >>
             `dimindex(:'r) > 1 + (dimindex(:'r) -2)   ` by simp [] >>
             lfs rws  >>
             rw []
-            >- 
+            >-
               (qexists_tac `n+1`  >>
               simp [LENGTH_WORD_TO_BITS, LENGTH_TAKE] )
             >>
               rw_tac arith_ss  [GSYM APPEND_ASSOC] >>
-              qpat_abbrev_tac `BS=(TAKE (dimindex (:ς) − 1)
-                (WORD_TO_BITS ((dimindex (:ς) − 2 -- 0) a2)) ++ [T])` >>
-              `LENGTH (BS) = dimindex(:'r)` 
-                 by simp[Abbr`BS`,LENGTH_TAKE,LENGTH_WORD_TO_BITS] >>
+              qpat_abbrev_tac `BSA = (TAKE Z
+                (WORD_TO_BITS X) ++ [T])` >>
+              `LENGTH (BSA) = dimindex(:'r)`
+                 by simp[Abbr`BSA`,LENGTH_TAKE,LENGTH_WORD_TO_BITS] >>
               `dimindex(:'r)>0` by simp [] >>
               Cases_on `m_s= []`
-              >- 
-              ( 
+              >-
+              (
                 rw [ SplittoWords2_def, Absorb_def] >>
                 simp [SplittoWords_def] >>
                 simp [(Once Split_def),Absorb_def] >>
-                simp [Abbr`BS`] >>
+                simp [Abbr`BSA`] >>
                 (rpt AP_TERM_TAC) >>
                 (* prepare so we can use one_short_lemma *)
                 (* `a2 = BITS_TO_WORD (WORD_TO_BITS a2)` by simp *)
                 (*   [BITS_TO_WORD_WORD_TO_BITS] >> *)
                 (* Q.ABBREV_TAC `a2bits = WORD_TO_BITS a2` >> *)
                 (* qpat_assum `a2 = X` (fn t => PURE_REWRITE_TAC [t]) *)
-                qpat_abbrev_tac `BLA = (TAKE (dimindex(:'r)-1) 
+                qpat_abbrev_tac `BLA = (TAKE (dimindex(:'r)-1)
                 (WORD_TO_BITS ((dimindex(:'r) -2 -- 0 ) a2))
                 )` >>
-                `LENGTH BLA = dimindex(:'r)-1` 
+                `LENGTH BLA = dimindex(:'r)-1`
                  by simp[Abbr`BLA`, LENGTH_TAKE,LENGTH_WORD_TO_BITS] >>
                  rw [one_short_lemma] >>
                  qunabbrev_tac `BLA` >>
@@ -2155,22 +2153,22 @@ val Invariant_mem = prove(
                 fs [WORD_BITS_COMP_THM]
               )
               >>
-                `LENGTH (BS ++ [T]) > 0` by simp [] >>
-                `LENGTH BS > 0` by simp [] >>
+                `LENGTH (BSA ++ [T]) > 0` by simp [] >>
+                `LENGTH BSA > 0` by simp [] >>
                 `LENGTH m_s <> 0` by simp [LENGTH_NIL] >>
                 `LENGTH m_s > 0` by simp [] >>
-                qspecl_then [`m_s`,`BS  `, `n`] 
+                qspecl_then [`m_s`,`BSA`, `n`]
                   assume_tac  SplittoWords_APPEND >>
                 lfs [] >>
                 simp [Absorb_APPEND] >>
                 rw [SplittoWords2_def] >>
                 qpat_abbrev_tac `PR=(SplittoWords m_s):'r word list` >>
                 simp [SplittoWords_def,(Once Split_def), Absorb_def] >>
-                qunabbrev_tac `BS` >>
-                qpat_abbrev_tac `BLA = (TAKE (dimindex(:'r)-1) 
+                qunabbrev_tac `BSA` >>
+                qpat_abbrev_tac `BLA = (TAKE (dimindex(:'r)-1)
                 (WORD_TO_BITS ((dimindex(:'r) -2 -- 0 ) a2))
                 )` >>
-                `LENGTH BLA = dimindex(:'r)-1` 
+                `LENGTH BLA = dimindex(:'r)-1`
                  by simp[Abbr`BLA`, LENGTH_TAKE,LENGTH_WORD_TO_BITS] >>
                 rw [one_short_lemma] >>
                 qunabbrev_tac `BLA` >>
@@ -2183,12 +2181,12 @@ val Invariant_mem = prove(
                 fs [WORD_BITS_COMP_THM]
             )
            >>  (*  a3 < dimindex(:'r)-1  *)
-            rfs rws >> 
+            rfs rws >>
             lfs ([GoodParameters_def]@rws) >>
             Cases_on `a3=0` >>
             (* both cases *)
             fs rws  >>
-            rw rws_hash_sans_split 
+            rw rws_hash_sans_split
             >- (
             `dimindex(:'r)>1` by simp [] >>
             simp [LENGTH_WORD_TO_BITS] >>
@@ -2418,26 +2416,25 @@ val Invariant_mem = prove(
          )
 );
 
-         
 val  Initial_State_MITB_def =
   Define `
-    (Initial_State_MITB f ((cntl,pmem,vmem),cor_r) ) =
+    (Initial_State_MITB f ((cntl,pmem,vmem),cor_r) ) ⇔
     (cntl = Ready) /\
     (pmem = (f(((ZERO:'c word) @@ (ZERO:'r word)): ('r+'c)
     word)):('r+'c) word ) /\
     (vmem = ZERO) /\
-    (cor_r = F) 
+    (cor_r = F)
     `;
 
 val  Initial_State_ALMOST_IDEAL_def =
   Define `
-    (Initial_State_ALMOST_IDEAL  ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)) =
+    (Initial_State_ALMOST_IDEAL  ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)) ⇔
     (k = ZERO) /\
     (cor_f = F) /\
     (cor_s = F) /\
     (cntl_s = Ready) /\
     (vm_s = ZERO) /\
-    (m_s = []) 
+    (m_s = [])
     )
     `;
 
@@ -2458,8 +2455,8 @@ STATE_INVARIANT_CNTL_def,STATE_INVARIANT_MEM_def]);
 (* Hash_WORD_TO_BITS_KEY fascilitates the proof of same_output.
  I couldn't figure out how to introduce an existential in an assumption,
  so I used this lemma instead.
- *) 
-val simple_lemma = prove( ``? n . (n=0) \/ (dimindex(:'r) =0)``, 
+ *)
+val simple_lemma = prove( ``? n . (n=0) \/ (dimindex(:'r) =0)``,
  qexists_tac `0` >> simp [] ) ;
 
 val Hash_WORD_TO_BITS_KEY = prove( ``
@@ -2499,7 +2496,7 @@ val same_output = prove(
   (* The simulator's state *)
   cor_s cntl_s vm_s m_s
   (* The environment's query *)
-  (input: ('r env_message) list) 
+  (input: ('r env_message) list)
   (* Trace in the mitbgame *)
   (mitb_trace: ((('c, 'r) proto_state # num) # ('n word,'n mitb_out)
   GameOutput) list )
@@ -2512,7 +2509,7 @@ val same_output = prove(
     /\
     (Initial_State_ALMOST_IDEAL ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
     /\
-    (mitb_trace = EXEC_LIST_FULL 
+    (mitb_trace = EXEC_LIST_FULL
       ((PROTO ( (MITB_STEP:('c,'n,'r) mitbstepfunction) f))
        : ('c,'r) proto_state -> ('n,'r) real_message
          -> (('c,'r) proto_state) # 'n real_proto_message)
@@ -2525,7 +2522,7 @@ val same_output = prove(
                   input)
     ==>
     (
-    EVERY (\(((s1,_),o1),(s2,o2)). (STATE_INVARIANT f s1 s2) /\ (o1=o2) ) 
+    EVERY (\(((s1,_),o1),(s2,o2)). (STATE_INVARIANT f s1 s2) /\ (o1=o2) )
       (ZIP (mitb_trace,alm_ideal_trace))
     )
 ``,
@@ -2541,8 +2538,8 @@ simp [LET_THM] >>
 Cases_on `s''` >>
 Cases_on `s'` >>
 simp [] >>
-qsuff_tac `STATE_INVARIANT f q (q',r')` 
->- ( (*Show that if STATE_INVARIANT holds, output is equal, too *) 
+qsuff_tac `STATE_INVARIANT f q (q',r')`
+>- ( (*Show that if STATE_INVARIANT holds, output is equal, too *)
 Cases_on `h`
 >- (
   Cases_on `a`
@@ -2595,14 +2592,28 @@ STATE_INVARIANT holds in the next step *)
 `STATE_INVARIANT f ((cntl,pmem,vmem),cor_r)
 ((k,cor_f),cor_s,cntl_s,vm_s,m_s)`
   by rw [initial_state_fulfulls_invariant] >>
-rw [STATE_INVARIANT_def] >>
-qpat_assum `A = ((q',r'),out)` (assume_tac o SYM) >>
-qpat_assum `A = ((q,r),out')` (assume_tac o SYM) >>
+simp [STATE_INVARIANT_def] >>
 split_all_pairs_tac >>
 fs [LET_THM] >>
 simp [] >>
-(* HERE *)
-cheat
+conj_tac >- (
+  first_x_assum(mp_tac o MATCH_MP(
+  Invariant_cor |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+  disch_then(fn th => first_x_assum (mp_tac o MATCH_MP th)) >>
+  simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
+  disch_then(qspec_then`h`mp_tac) >> simp[] ) >>
+conj_tac >- (
+  first_x_assum(mp_tac o MATCH_MP(
+  Invariant_cntl |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+  disch_then(fn th => first_x_assum (mp_tac o MATCH_MP th)) >>
+  simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
+  disch_then(qspec_then`h`mp_tac) >> simp[] ) >>
+
+  first_x_assum(mp_tac o MATCH_MP(
+  Invariant_mem |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+  disch_then(fn th => first_x_assum (mp_tac o MATCH_MP th)) >>
+  simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
+  disch_then(qspec_then`h`mp_tac) >> simp[]
 )
 >> (* Use Invariant_cor Invariant_cntl Invariant_mem to show
 STATE_INVARIANT holds in the next step *)
