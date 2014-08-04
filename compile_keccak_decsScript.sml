@@ -1,4 +1,4 @@
-open HolKernel boolLib bossLib (* repl_computeLib repl_computeTheory *) ml_keccak_funTheory
+open HolKernel boolLib bossLib (* repl_computeLib repl_computeTheory ml_keccak_funTheory *)
 val _ = new_theory"compile_keccak_decs"
 
 (* This is all highly out of date

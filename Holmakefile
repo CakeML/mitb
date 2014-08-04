@@ -1,19 +1,20 @@
 ifndef VMLDIR
-VMLDIR = ../vml
+VMLDIR = ../cakeml
 endif
 
-INCLUDES = $(VMLDIR)/translator
+# INCLUDES = $(VMLDIR)/translator
 OPTIONS = QUIT_ON_FAILURE
 
 ifdef POLY
 HOLHEAP = heap
-PARENT_HOLHEAP = $(VMLDIR)/translator/local-hol-heap
+# PARENT_HOLHEAP = $(VMLDIR)/translator/local-hol-heap
 EXTRA_CLEANS = $(HOLHEAP) $(HOLHEAP).o
 
-BARE_THYS = $(VMLDIR)/translator/ml_translatorTheory
+# BARE_THYS = # $(VMLDIR)/translator/ml_translatorTheory
 
 DEPS = $(patsubst %,%.uo,$(BARE_THYS))
 
 $(HOLHEAP): $(DEPS)
-	$(protect $(HOLDIR)/bin/buildheap) -b $(PARENT_HOLHEAP) -o $(HOLHEAP) $(BARE_THYS)
+	# $(protect $(HOLDIR)/bin/buildheap) -b $(PARENT_HOLHEAP) -o $(HOLHEAP) $(BARE_THYS)
+	$(protect $(HOLDIR)/bin/buildheap) -o $(HOLHEAP)
 endif
