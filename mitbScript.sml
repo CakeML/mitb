@@ -1587,6 +1587,8 @@ val Invariant_cor = prove(
  ``! f
      (* The MITB's state in the real game *)
      (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
+     (* The dummy adversary's state, does not matter really *)
+     nd
      (* The functionality's state (cor_s is shared with Sim)*)
       k cor_f
       (* The simulator's state *)
@@ -1600,7 +1602,7 @@ val Invariant_cor = prove(
       ==>
       let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r: ('n word, 'n
       mitb_out) GameOutput ) =
-         (MITB_GAME f) ((((cntl,pmem,vmem),cor_r),0),input)
+         (MITB_GAME f) ((((cntl,pmem,vmem),cor_r),nd),input)
       in
         (
        let
@@ -1683,6 +1685,8 @@ val Invariant_cntl = prove(
   (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
   (* The functionality's state (cor_s is shared with Sim)*)
   k cor_f
+  (* The dummy adversary's state, does not matter really *)
+     nd
   (* The simulator's state *)
   cor_s cntl_s vm_s m_s
   (* The environment's query *)
@@ -1694,7 +1698,7 @@ val Invariant_cntl = prove(
   ==>
   let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r: ('n word, 'n
   mitb_out) GameOutput ) =
-      (MITB_GAME f) ((((cntl,pmem,vmem),cor_r),0),input)
+      (MITB_GAME f) ((((cntl,pmem,vmem),cor_r),nd),input)
   in
     (
     let
@@ -1998,6 +2002,8 @@ val Invariant_mem = prove(
   (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
   (* The functionality's state (cor_s is shared with Sim)*)
   k cor_f
+   (* The dummy adversary's state, does not matter really *)
+   nd
   (* The simulator's state *)
   cor_s cntl_s vm_s m_s
   (* The environment's query *)
@@ -2009,7 +2015,7 @@ val Invariant_mem = prove(
   ==>
   let ((((cntl_n,pmem_n,vmem_n),cor_r_n),_), out_r: ('n word, 'n
   mitb_out) GameOutput ) =
-      (MITB_GAME f) ((((cntl,pmem,vmem),cor_r),0),input)
+      (MITB_GAME f) ((((cntl,pmem,vmem),cor_r),nd),input)
   in
     (
     let
@@ -2487,12 +2493,14 @@ rw [GSYM ADD_ASSOC,a_mult_b_mod_a_lemma]
 );
 
 
-val same_output = prove(
+val same_output_ind = prove(
 ``! f
   (* The MITB's state in the real game *)
   (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
   (* The functionality's state (cor_s is shared with Sim)*)
   k cor_f
+  (* The dummy adversary's state, does not matter really *)
+  nd
   (* The simulator's state *)
   cor_s cntl_s vm_s m_s
   (* The environment's query *)
@@ -2505,16 +2513,14 @@ val same_output = prove(
   .
     (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
     /\
-    (Initial_State_MITB f  ((cntl,pmem,vmem),cor_r) )
-    /\
-    (Initial_State_ALMOST_IDEAL ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
+    (STATE_INVARIANT f  ((cntl,pmem,vmem),cor_r) ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)) )
     /\
     (mitb_trace = EXEC_LIST_FULL
       ((PROTO ( (MITB_STEP:('c,'n,'r) mitbstepfunction) f))
        : ('c,'r) proto_state -> ('n,'r) real_message
          -> (('c,'r) proto_state) # 'n real_proto_message)
       DUMMY_ADV
-      (((cntl,pmem,vmem),cor_r),0)
+      (((cntl,pmem,vmem),cor_r),nd)
       input)
     /\
     (alm_ideal_trace = EXEC_LIST_FULL (FMAC (Hash f ZERO)) SIM
@@ -2531,94 +2537,158 @@ Induct_on `input`
 >>
 rw [EXEC_LIST_FULL_def] >>
 rw [listTheory.EVERY_DEF]
->- ( (* Show that property holds for the last elements *)
-qpat_assum `! f ctnl . X` (fn t=> all_tac)  >>
-      (* remove IH because we don't need it *)
-simp [LET_THM] >>
-Cases_on `s''` >>
-Cases_on `s'` >>
-simp [] >>
-qsuff_tac `STATE_INVARIANT f q (q',r')`
->- ( (*Show that if STATE_INVARIANT holds, output is equal, too *)
-Cases_on `h`
->- (
-  Cases_on `a`
-  >- ( (* SetKey *)
-    split_all_pairs_tac >>
-    fs rws_invariants >>
-    split_all_control_tac >> fs [] >>
-    split_all_bools_tac >> fs [] >>
-    fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
-    fs rws >>
-    rfs []
-  )
-  >- ( (* Mac *)
-    lfs [MITB_GAME_def, EXEC_STEP_def, ROUTE_THREE_def,
-    ROUTE_def, ENV_WRAPPER_def] >>
-    Cases_on `~cor_r` >>
-    first_assum((fn t => fs[t]) o MATCH_MP ( Q.GEN `m` mac_message_lemma)) >>
-    fs rws >>
-    split_all_pairs_tac >>
-    fs rws_invariants >>
-    split_all_control_tac >> fs [] >>
-    split_all_bools_tac >> fs [] >>
-    fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
-    fs rws >>
-    rw [Hash_WORD_TO_BITS_KEY]
+  >- ( (* Show that property holds for the last elements *)
+  qpat_assum `! f ctnl . X` (fn t=> all_tac)  >>
+        (* remove IH because we don't need it *)
+  simp [LET_THM] >>
+  Cases_on `s''` >>
+  Cases_on `s'` >>
+  simp [] >>
+  qsuff_tac `STATE_INVARIANT f q (q',r')`
+  >- ( (*Show that if STATE_INVARIANT holds, output is equal, too *)
+  Cases_on `h`
+  >- (
+    Cases_on `a`
+    >- ( (* SetKey *)
+      split_all_pairs_tac >>
+      fs rws_invariants >>
+      split_all_control_tac >> fs [] >>
+      split_all_bools_tac >> fs [] >>
+      fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
+      fs rws >>
+      rfs []
     )
-  >> (* Corrupt *)
-  (
+    >- ( (* Mac *)
+      lfs [MITB_GAME_def, EXEC_STEP_def, ROUTE_THREE_def,
+      ROUTE_def, ENV_WRAPPER_def] >>
+      Cases_on `~cor_r` >>
+      first_assum((fn t => fs[t]) o MATCH_MP ( Q.GEN `m` mac_message_lemma)) >>
+      fs rws >>
+      split_all_pairs_tac >>
+      fs rws_invariants >>
+      split_all_control_tac >> fs [] >>
+      split_all_bools_tac >> fs [] >>
+      fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
+      fs rws >>
+      rw [Hash_WORD_TO_BITS_KEY]
+      )
+      >> (* Corrupt *)
+      (
+        split_all_pairs_tac >>
+        fs rws_invariants >>
+        split_all_control_tac >> fs [] >>
+        split_all_bools_tac >> fs [] >>
+        fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
+        fs rws >>
+        rfs []
+      )
+      )
+    >>
+      Cases_on `b` >>
+      split_all_pairs_tac >>
+      fs rws_invariants >>
+      split_all_control_tac >> fs [] >>
+      split_all_bools_tac >> fs [] >>
+      fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
+      fs rws >>
+      lfs (rws@rws_hash) >>
+      rfs [] >>
+      rw (rws@rws_hash) >>
+      BasicProvers.EVERY_CASE_TAC >>
+      fsrw_tac [ARITH_ss] rws >> rw[]
+    )
+    >> (* Use Invariant_cor Invariant_cntl Invariant_mem to show
+    STATE_INVARIANT holds in the next step *)
+    (* not needed anymore *)
+    (* `STATE_INVARIANT f ((cntl,pmem,vmem),cor_r) *)
+    (* ((k,cor_f),cor_s,cntl_s,vm_s,m_s)` *)
+    (*   by rw [initial_state_fulfulls_invariant] >> *)
+    (* rw [STATE_INVARIANT_def] >> *)
+    qpat_assum `A = ((q',r'),out)` (assume_tac o SYM) >>
+    qpat_assum `A = ((q,r),out')` (assume_tac o SYM) >>
     split_all_pairs_tac >>
-    fs rws_invariants >>
-    split_all_control_tac >> fs [] >>
-    split_all_bools_tac >> fs [] >>
-    fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
-    fs rws >>
-    rfs []
-  )
-  )
->>
-  Cases_on `b` >>
-  split_all_pairs_tac >>
-  fs rws_invariants >>
-  split_all_control_tac >> fs [] >>
-  split_all_bools_tac >> fs [] >>
-  fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
-  fs rws >>
-  rfs []
+    fs [LET_THM] >>
+    simp [] >>
+    (* HERE *)
+    cheat
 )
->> (* Use Invariant_cor Invariant_cntl Invariant_mem to show
-STATE_INVARIANT holds in the next step *)
-`STATE_INVARIANT f ((cntl,pmem,vmem),cor_r)
-((k,cor_f),cor_s,cntl_s,vm_s,m_s)`
-  by rw [initial_state_fulfulls_invariant] >>
-simp [STATE_INVARIANT_def] >>
-split_all_pairs_tac >>
-fs [LET_THM] >>
-simp [] >>
-conj_tac >- (
-  first_x_assum(mp_tac o MATCH_MP(
-  Invariant_cor |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
-  disch_then(fn th => first_x_assum (mp_tac o MATCH_MP th)) >>
-  simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
-  disch_then(qspec_then`h`mp_tac) >> simp[] ) >>
-conj_tac >- (
-  first_x_assum(mp_tac o MATCH_MP(
-  Invariant_cntl |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
-  disch_then(fn th => first_x_assum (mp_tac o MATCH_MP th)) >>
-  simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
-  disch_then(qspec_then`h`mp_tac) >> simp[] ) >>
-
-  first_x_assum(mp_tac o MATCH_MP(
-  Invariant_mem |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
-  disch_then(fn th => first_x_assum (mp_tac o MATCH_MP th)) >>
-  simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
-  disch_then(qspec_then`h`mp_tac) >> simp[]
-)
+    >> (* Use Invariant_cor Invariant_cntl Invariant_mem to show
+    STATE_INVARIANT holds in the next step *)
+    `STATE_INVARIANT f ((cntl,pmem,vmem),cor_r)
+    ((k,cor_f),cor_s,cntl_s,vm_s,m_s)`
+      by rw [initial_state_fulfulls_invariant] >>
+    simp [STATE_INVARIANT_def] >>
+    split_all_pairs_tac >>
+    fs [LET_THM] >>
+    simp [] >>
+    conj_tac >- (
+      first_x_assum(mp_tac o MATCH_MP(
+      Invariant_cor |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+      disch_then(fn th => first_x_assum (mp_tac o MATCH_MP th)) >>
+      simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
+      disch_then(qspecl_then [`nd`,`h`] mp_tac) >>
+      simp[] ) >>
+    conj_tac >- (
+      first_x_assum(mp_tac o MATCH_MP(
+      Invariant_cntl |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+      disch_then(fn th => first_x_assum (mp_tac o MATCH_MP th)) >>
+      simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
+      disch_then(qspecl_then [`nd`,`h`] mp_tac) >> simp [] 
+      )>>
+      first_x_assum(mp_tac o MATCH_MP(
+      Invariant_mem |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+      disch_then(fn th => first_x_assum (mp_tac o MATCH_MP th)) >>
+      simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
+      disch_then(qspecl_then [`nd`,`h`] mp_tac ) >> simp []
+    )
 >> (* Use Invariant_cor Invariant_cntl Invariant_mem to show
 STATE_INVARIANT holds in the next step *)
 cheat
 );
+
+val same_output = prove(
+``! f
+  (* The MITB's state in the real game *)
+  (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
+  (* The functionality's state (cor_s is shared with Sim)*)
+  k cor_f
+  (* The dummy adversary's state, does not matter really *)
+  nd
+  (* The simulator's state *)
+  cor_s cntl_s vm_s m_s
+  (* The environment's query *)
+  (input: ('r env_message) list) 
+  (* Trace in the mitbgame *)
+  (mitb_trace: ((('c, 'r) proto_state # num) # ('n word,'n mitb_out)
+  GameOutput) list )
+  (* Trace in the almost ideal game *)
+  (alm_ideal_trace)
+  .
+    (GoodParameters (dimindex(:'r),dimindex(:'c),dimindex(:'n)))
+    /\
+    (Initial_State_MITB f  ((cntl,pmem,vmem),cor_r) )
+    /\
+    (Initial_State_ALMOST_IDEAL ((k,cor_f),(cor_s,cntl_s,vm_s,m_s)))
+    /\
+    (mitb_trace = EXEC_LIST_FULL 
+      ((PROTO ( (MITB_STEP:('c,'n,'r) mitbstepfunction) f))
+       : ('c,'r) proto_state -> ('n,'r) real_message
+         -> (('c,'r) proto_state) # 'n real_proto_message)
+      DUMMY_ADV
+      (((cntl,pmem,vmem),cor_r),nd)
+      input)
+    /\
+    (alm_ideal_trace = EXEC_LIST_FULL (FMAC (Hash f ZERO)) SIM
+                  ((k,cor_f),(cor_s,cntl_s,vm_s,m_s))
+                  input)
+    ==>
+    (
+    EVERY (\(((s1,_),o1),(s2,o2)). (STATE_INVARIANT f s1 s2) /\ (o1=o2) ) 
+      (ZIP (mitb_trace,alm_ideal_trace))
+    )
+``,
+(* TODO *)
+;
 
 
 val _ = export_theory();
