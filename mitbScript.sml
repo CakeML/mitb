@@ -1128,11 +1128,11 @@ val STATE_INVARIANT_MEM_def =
 val STATE_INVARIANT_def =
   Define `
   STATE_INVARIANT f (state_r) (state_f) ⇔
-     (STATE_INVARIANT_COR (state_r) (state_f))
+    ( (STATE_INVARIANT_COR (state_r) (state_f))
      /\
      (STATE_INVARIANT_CNTL (state_r) (state_f))
      /\
-     (STATE_INVARIANT_MEM f (state_r) (state_f))`
+     (STATE_INVARIANT_MEM f (state_r) (state_f)))`
 
 val rws_invariants =
  [ STATE_INVARIANT_def, STATE_INVARIANT_COR_def,
@@ -2446,7 +2446,7 @@ val  Initial_State_ALMOST_IDEAL_def =
 
 val initial_state_fulfulls_invariant = prove(``
 ! f (cntl:control) (pmem:('r+'c) word) (vmem:('r+'c) word)  (cor_r:bool)
-  k cor_f cor_s cntl_s vm_s m_s
+  k cor_f cor_s cntl_s (vm_s: 'n word) m_s
   .
     (Initial_State_MITB f  ((cntl,pmem,vmem),cor_r) )
     /\
@@ -2547,33 +2547,9 @@ rw [listTheory.EVERY_DEF]
   qsuff_tac `STATE_INVARIANT f q (q',r')`
   >- ( (*Show that if STATE_INVARIANT holds, output is equal, too *)
   Cases_on `h`
-  >- (
-    Cases_on `a`
-    >- ( (* SetKey *)
-      split_all_pairs_tac >>
-      fs rws_invariants >>
-      split_all_control_tac >> fs [] >>
-      split_all_bools_tac >> fs [] >>
-      fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
-      fs rws >>
-      rfs []
-    )
-    >- ( (* Mac *)
-      lfs [MITB_GAME_def, EXEC_STEP_def, ROUTE_THREE_def,
-      ROUTE_def, ENV_WRAPPER_def] >>
-      Cases_on `~cor_r` >>
-      first_assum((fn t => fs[t]) o MATCH_MP ( Q.GEN `m` mac_message_lemma)) >>
-      fs rws >>
-      split_all_pairs_tac >>
-      fs rws_invariants >>
-      split_all_control_tac >> fs [] >>
-      split_all_bools_tac >> fs [] >>
-      fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
-      fs rws >>
-      rw [Hash_WORD_TO_BITS_KEY]
-      )
-      >> (* Corrupt *)
-      (
+    >- (
+      Cases_on `a`
+      >- ( (* SetKey *)
         split_all_pairs_tac >>
         fs rws_invariants >>
         split_all_control_tac >> fs [] >>
@@ -2582,7 +2558,31 @@ rw [listTheory.EVERY_DEF]
         fs rws >>
         rfs []
       )
-      )
+      >- ( (* Mac *)
+        lfs [MITB_GAME_def, EXEC_STEP_def, ROUTE_THREE_def,
+        ROUTE_def, ENV_WRAPPER_def] >>
+        Cases_on `~cor_r` >>
+        first_assum((fn t => fs[t]) o MATCH_MP ( Q.GEN `m` mac_message_lemma)) >>
+        fs rws >>
+        split_all_pairs_tac >>
+        fs rws_invariants >>
+        split_all_control_tac >> fs [] >>
+        split_all_bools_tac >> fs [] >>
+        fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
+        fs rws >>
+        rw [Hash_WORD_TO_BITS_KEY]
+        )
+        >> (* Corrupt *)
+        (
+          split_all_pairs_tac >>
+          fs rws_invariants >>
+          split_all_control_tac >> fs [] >>
+          split_all_bools_tac >> fs [] >>
+          fs [Initial_State_MITB_def, Initial_State_ALMOST_IDEAL_def] >>
+          fs rws >>
+          rfs []
+        )
+    )
     >>
       Cases_on `b` >>
       split_all_pairs_tac >>
@@ -2599,24 +2599,6 @@ rw [listTheory.EVERY_DEF]
     )
     >> (* Use Invariant_cor Invariant_cntl Invariant_mem to show
     STATE_INVARIANT holds in the next step *)
-    (* not needed anymore *)
-    (* `STATE_INVARIANT f ((cntl,pmem,vmem),cor_r) *)
-    (* ((k,cor_f),cor_s,cntl_s,vm_s,m_s)` *)
-    (*   by rw [initial_state_fulfulls_invariant] >> *)
-    (* rw [STATE_INVARIANT_def] >> *)
-    qpat_assum `A = ((q',r'),out)` (assume_tac o SYM) >>
-    qpat_assum `A = ((q,r),out')` (assume_tac o SYM) >>
-    split_all_pairs_tac >>
-    fs [LET_THM] >>
-    simp [] >>
-    (* HERE *)
-    cheat
-)
-    >> (* Use Invariant_cor Invariant_cntl Invariant_mem to show
-    STATE_INVARIANT holds in the next step *)
-    `STATE_INVARIANT f ((cntl,pmem,vmem),cor_r)
-    ((k,cor_f),cor_s,cntl_s,vm_s,m_s)`
-      by rw [initial_state_fulfulls_invariant] >>
     simp [STATE_INVARIANT_def] >>
     split_all_pairs_tac >>
     fs [LET_THM] >>
@@ -2640,10 +2622,35 @@ rw [listTheory.EVERY_DEF]
       disch_then(fn th => first_x_assum (mp_tac o MATCH_MP th)) >>
       simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
       disch_then(qspecl_then [`nd`,`h`] mp_tac ) >> simp []
-    )
+)
 >> (* Use Invariant_cor Invariant_cntl Invariant_mem to show
 STATE_INVARIANT holds in the next step *)
-cheat
+split_all_pairs_tac >>
+fs [LET_THM] >>
+(* cor *)
+first_assum(mp_tac o MATCH_MP(
+Invariant_cor |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+disch_then(fn th => first_assum (mp_tac o MATCH_MP th)) >>
+simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
+disch_then(qspecl_then [`nd`,`h`] mp_tac) >> 
+disch_then assume_tac >>
+(* cntl *)
+first_assum(mp_tac o MATCH_MP(
+Invariant_cntl |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+disch_then(fn th => first_assum (mp_tac o MATCH_MP th)) >>
+simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
+disch_then(qspecl_then [`nd`,`h`] mp_tac) >> 
+disch_then assume_tac >>
+(* mem *)
+first_assum(mp_tac o MATCH_MP(
+Invariant_mem |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+disch_then(fn th => first_assum (mp_tac o MATCH_MP th)) >>
+simp[ALMOST_IDEAL_GAME_def,MITB_GAME_def] >>
+disch_then(qspecl_then [`nd`,`h`] mp_tac) >> 
+disch_then assume_tac >>
+rfs [] >>
+(* show invariant for the first step *)
+fs [STATE_INVARIANT_def] 
 );
 
 val same_output = prove(
@@ -2687,7 +2694,15 @@ val same_output = prove(
       (ZIP (mitb_trace,alm_ideal_trace))
     )
 ``,
-(* TODO *)
+rw [] >>
+first_assum(mp_tac o MATCH_MP (
+  initial_state_fulfulls_invariant |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+disch_then(fn th => last_assum (assume_tac o MATCH_MP th)) >>
+first_x_assum(mp_tac o MATCH_MP (
+  same_output_ind |> REWRITE_RULE[GSYM AND_IMP_INTRO])) >>
+disch_then(fn th => last_x_assum (assume_tac o MATCH_MP th)) >>
+fs []
+)
 ;
 
 
