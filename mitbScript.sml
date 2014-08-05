@@ -310,8 +310,7 @@ strip_tac >> Induct
 >- (rw [numposrepTheory.l2n_def] >> simp [])
 >>
 rw [numposrepTheory.l2n_def] >>
-`b** SUC(LENGTH c) = b* b ** (LENGTH c)` by cheat >>
-rw [] >> simp []
+simp [EXP]
 );
 
 val BITS_TO_WORD_APPEND = store_thm("BITS_TO_WORD_APPEND",
