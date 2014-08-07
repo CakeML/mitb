@@ -310,22 +310,7 @@ strip_tac >> Induct
 >- (rw [numposrepTheory.l2n_def] >> simp [])
 >>
 rw [numposrepTheory.l2n_def] >>
-`b** SUC(LENGTH c) = b* b ** (LENGTH c)` by cheat >>
-rw [] >> simp []
-);
-
-val BITS_TO_WORD_APPEND = store_thm("BITS_TO_WORD_APPEND",
-``(BITS_TO_WORD (a++b):'r word ) =
-((BITS_TO_WORD a:'r word) || ((BITS_TO_WORD b)<< (LENGTH a)))``,
-rw [BITS_TO_WORD_def, word_from_bin_list_def,
-    l2w_def] >>
-rw [l2n_APPEND] >>
-rw [WORD_MUL_LSL ] >>
-rw [GSYM word_add_n2w] >>
-qpat_abbrev_tac `A=l2n 2 (MAP (\e. if e then 1 else 0) a)` >>
-qpat_abbrev_tac `B=l2n 2 (MAP (\e. if e then 1 else 0) b)` >>
-rw [word_mul_n2w] >>
-cheat 
+simp [EXP]
 );
 
 (*
@@ -513,10 +498,6 @@ int_min_lemma
   independent of the word being padded.
 *)
 
-(*
-TODO proof this lemma
-*)
-
 val one_short_lemma = prove (
 ``
 (LENGTH(m) = dimindex(:'r)-1)
@@ -524,13 +505,34 @@ val one_short_lemma = prove (
 ( 2 < dimindex(:'r))
 ==>
 (
-(BITS_TO_WORD (m ++ [T]) =
+((BITS_TO_WORD (m ++ [T]):'r word) =
  (((LENGTH m)-1 -- 0 ) (BITS_TO_WORD m) || PAD_WORD (LENGTH m) ))
 )
 ``,
-cheat
+strip_tac >>
+simp[GSYM WORD_EQ] >>
+rw[] >>
+`x < LENGTH (m ++ [t])` by  simp[]  >>
+simp[word_bit_BITS_TO_WORD] >>
+simp[word_bit_def, word_bit_or, PAD_WORD_def, word_bits_def] >>
+Cases_on `(LENGTH m)<= x`
+>-
+( 
+  `x=dimindex(:'r)-1` by simp [] >>
+  SRW_TAC [fcpLib.FCP_ss] [EL_APPEND2] >>
+  simp []
+)
+>>
+  fs [NOT_LESS_EQUAL] >>
+  SRW_TAC [fcpLib.FCP_ss] [EL_APPEND1] >>
+  first_assum (assume_tac o MATCH_MP 
+    ( INST_TYPE [alpha |-> Type `:'r`]  word_bit_BITS_TO_WORD)) >>
+  rfs [] >>
+  simp [] >>
+  fs [word_bit_def] >>
+  `x <= dimindex(:'r)-1` by simp [] >>
+  fs []
 );
-
 
 val int_min_lemma = prove (
   ``
@@ -1966,32 +1968,6 @@ dimindex(:'r) > 1
 );
 
 
-(* TODO check if this can be deleted *)
-val SplittoWords_Pad_reduction = prove(
-``
-(dimindex(:'r) >1)
-==>
-( SplittoWords (Pad (dimindex(:'r)) (FLAT (MAP WORD_TO_BITS (m: 'r word::mr))))
- =
-  m :: SplittoWords (Pad (dimindex(:'r)) (FLAT (MAP WORD_TO_BITS
-  (mr))))
-)
-  ``,
-  rw [] >>
-  qmatch_abbrev_tac `LHS = RHS` >> qunabbrev_tac `LHS` >>
-  simp [LENGTH_WORD_TO_BITS,Pad_APPEND, SplittoWords_def] >>
-  qpat_abbrev_tac `rest = (Pad (dimindex (:ς)) (FLAT (MAP WORD_TO_BITS
-  mr)))` >>
-  `LENGTH (WORD_TO_BITS m)=dimindex(:'r)` by rw [LENGTH_WORD_TO_BITS] >>
-  `LENGTH (rest) > 0` by simp [Abbr`rest`,Pad_def] >>
-  `LENGTH (WORD_TO_BITS m)> 0` by simp [] >>
-Q.ISPECL_THEN [`rest`,`WORD_TO_BITS m`] assume_tac (GEN_ALL
-Split_LENGTH_APPEND) >>
-res_tac >>
-rfs [] >> simp [Abbr`RHS`,BITS_TO_WORD_WORD_TO_BITS, SplittoWords_def]
-);
-
-
 (*
 Given that the complete invariant holds, the state part
 of the invariant holds in the next step.
@@ -2704,7 +2680,6 @@ disch_then(fn th => last_x_assum (assume_tac o MATCH_MP th)) >>
 fs []
 )
 ;
-
 
 val _ = export_theory();
 
