@@ -325,6 +325,7 @@ qpat_abbrev_tac `A=l2n 2 (MAP (\e. if e then 1 else 0) a)` >>
 qpat_abbrev_tac `B=l2n 2 (MAP (\e. if e then 1 else 0) b)` >>
 rw [word_mul_n2w] >>
 cheat 
+(* WORD_SLICE_COMP_THM *)
 );
 
 (*
@@ -523,13 +524,34 @@ val one_short_lemma = prove (
 ( 2 < dimindex(:'r))
 ==>
 (
-(BITS_TO_WORD (m ++ [T]) =
+((BITS_TO_WORD (m ++ [T]):'r word) =
  (((LENGTH m)-1 -- 0 ) (BITS_TO_WORD m) || PAD_WORD (LENGTH m) ))
 )
 ``,
-cheat
+strip_tac >>
+simp[GSYM WORD_EQ] >>
+rw[] >>
+`x < LENGTH (m ++ [t])` by  simp[]  >>
+simp[word_bit_BITS_TO_WORD] >>
+simp[word_bit_def, word_bit_or, PAD_WORD_def, word_bits_def] >>
+Cases_on `(LENGTH m)<= x`
+>-
+( 
+  `x=dimindex(:'r)-1` by simp [] >>
+  SRW_TAC [fcpLib.FCP_ss] [EL_APPEND2] >>
+  simp []
+)
+>>
+  fs [NOT_LESS_EQUAL] >>
+  SRW_TAC [fcpLib.FCP_ss] [EL_APPEND1] >>
+  first_assum (assume_tac o MATCH_MP 
+    ( INST_TYPE [alpha |-> Type `:'r`]  word_bit_BITS_TO_WORD)) >>
+  rfs [] >>
+  simp [] >>
+  fs [word_bit_def] >>
+  `x <= dimindex(:'r)-1` by simp [] >>
+  fs []
 );
-
 
 val int_min_lemma = prove (
   ``
@@ -2703,7 +2725,6 @@ disch_then(fn th => last_x_assum (assume_tac o MATCH_MP th)) >>
 fs []
 )
 ;
-
 
 val _ = export_theory();
 
