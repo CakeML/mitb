@@ -1,3 +1,6 @@
+(* Mike moved definitions of cut, cut_uneven earlier to get file to
+load  - is this OK?*)
+
 exception InvalidInputString;
 exception TruncLargerThanBitrate;
 exception UnpaddedBlock;
@@ -7,8 +10,9 @@ exception TableOutOfBounds;
 exception CoordinatesNotInList of int * int;
 exception InvalidIntList;
 exception BadBitstringLength;
-exception NotInRangeOfPartialLog;
 
+(* Part I - Preliminaries *) 
+(* ====================== *) 
 
 (* Operations on bits and bitstrings *)
 fun neg a = not a;
@@ -21,12 +25,13 @@ fun op andop (a,b: bitstring) = List.map bitand (ListPair.zipEq  (a,b));
 fun negate (a: bitstring) = List.map (not) a;
 
 (* Bitwise cyclic shift *)
+fun rot (a  , 0) = a
+  | rot ([] , n) = []
+  | rot (a  , n) =
+        List.drop(a,(n mod length(a)))@List.take(a,(n mod length(a)))
 
-infix 9 bitxor
-infix 9 bitand
 infix 9 xor
 infix 9 andop
-
 
 (* Conversion function for bitstrings *)
 fun powerOftwo 0 = Int.toLarge(1)
@@ -53,46 +58,23 @@ in
   helper 0 bs
 end;
 
-(* little helper for examples *)
-fun repeat 0 _ = []
-  | repeat n item = item::(repeat (n-1) item);
-
-(* Tools for the matrix representation we use *)
-
-(* Helper functions for matrix representation of list used in permutation *)
+(* Cut a list into a list containing lists of n elements *)
 fun cut n [] = []
   | cut n bs = (List.take(bs,n))::(cut n (List.drop(bs,n)))
+
+(* Cut a list into a list containing lists of n elements, except for the
+* trailing list, which might contain less than n elements. *)
 fun cut_uneven n bs = 
   (* cuts with a rest *)
   if List.length(bs) <= n then [bs]
   else 
     (List.take(bs,n))::(cut_uneven n (List.drop(bs,n)))
 
-fun list2funmatrix (bs:bitstring) = 
-  (fn (qx,qy,qz) => 
-      let 
-        val (x,y,z) = ((qx mod 5),(qy mod 5),(qz mod 64))
-      in
-        List.nth(bs,64*(5*y + x) + z)
-      end
-      )
+(* little helper for examples *)
+fun repeat 0 _ = []
+  | repeat n item = item::(repeat (n-1) item);
 
-fun funmatrix2list (mat) = 
-let
-  fun create n =
-  let
-    val z=n mod 64
-    val x=((n-z) mod 320) div 64
-    val y=(n - (64*x) - z) div 320
-  in
-    mat (x,y,z)
-  end
-in
-  List.tabulate (1600,create)
-end
-
-(* Input out things .. for convenience *) 
-
+(* Pretty printing a bitstring *)
 fun pp bs = 
   (* This follows the conventions described in Keccak-submission-3.pdf, Section
   * 6.1 
@@ -116,7 +98,7 @@ fun pp bs =
 
 fun pp2 bs = List.foldr (fn (lst,str) => pp(lst)^" "^str) "" (cut 8 bs)
 
-fun pinp s = 
+fun pi s = 
   (* This follows the conventions described in Keccak-submission-3.pdf, Section
   * 6.1 *)
 let 
@@ -148,24 +130,58 @@ in
     end
 end;
 
+
+(* Part II - Matrix representation *) 
+(* =============================== *) 
+
+(* The reference implementation uses arrays of arrays of bits for the
+* representation of the state inside the permutation. We don't have those means,
+* instead, we rely on transforming the input to the permutation, a list of bool,
+* into a list representation of a matrix, that is, a list of lists of lists of
+* bools. 
+* The following helper functions for said matrix representation are used in the
+* implementation of the permutation *)
+
+fun list2matrix (bs:bitstring) =
+  (* converts a list of bools into 25 segments of length 64, 
+   * sorting them as a list that has 25 elements which are lists of size 64 *)
+   if List.length(bs)<>1600 then
+     raise BlockOfWrongSize
+   else
+     cut 5 ( List.map (List.rev) (cut 64 (bs)));
+
+fun matrix2list mat=
+let 
+  fun flatten lst = List.foldr (op @) [] lst
+in
+  flatten ( List.map (List.rev) (flatten mat) )
+end
+
+(* Matrix access. Note that the outer list is accessed via y coordinates, the
+* lists within by x coordinates *)
+fun apply_numbered f lst=
+    case
+     (List.foldr (fn (el,(x,lst)) => (x-1,(f(x,el)::lst)))
+     (List.length(lst)-1,[]) lst )
+     of
+         (_,res) => res;
+fun apply_mat f mat=
+    apply_numbered (fn (y,row) => apply_numbered (fn (x,el) => f(x,y,el)) row )
+    mat;
+
+(* Access the element at position (x,y) *)
+fun el mat (x,y) = (* List.nth(mat,5*(y mod 5)+(x mod 5)); *)
+  List.nth(List.nth(mat,y mod 5), x mod 5) 
+
+(* Generate a matrix where each element is their pair of coordinates *)
+val gen_mat_25 = List.tabulate (5, (fn x => List.tabulate(5, (fn y => (x,y)))));
+
+
+
 (* Pretty printing for matrixes. Words are shown reversed, i.e., msb at the
 * front. *)
 fun print_mat block =
 let 
-  val gen_mat_25 = List.tabulate (5, (fn x => List.tabulate(5, (fn y => (x,y)))))
-  fun apply_numbered f lst=
-      case
-       (List.foldr (fn (el,(x,lst)) => (x-1,(f(x,el)::lst)))
-       (List.length(lst)-1,[]) lst )
-       of
-           (_,res) => res;
-
-  fun apply_mat f mat=
-      apply_numbered (fn (y,row) => apply_numbered (fn (x,el) => f(x,y,el)) row )
-      mat;
-  fun funmatrix2listmatrix mat =
-    apply_mat (fn (x,y,_) => List.tabulate (64,(fn z => mat(x,y,z))))
-    gen_mat_25;
   fun format_bs el = 
     (*
       let 
@@ -179,7 +195,7 @@ let
       end 
       *)
       let 
-        val s = ( Int.fmt StringCvt.HEX ( bitstring2int (el)))
+        val s = ( Int.fmt StringCvt.HEX ( bitstring2int (List.rev el) ))
         val l = String.size(s)
         fun prepend s 0 = s
            |prepend s n = "0"^(prepend s (n-1))
@@ -195,151 +211,120 @@ in
   print( print_mat block)
 end;
 
-fun print_funmat block =
-    print_mat (funmatrix2listmatrix block) ;
 
-  fun theta mat (qx,qy,qz)= 
+(* Part III - The Keccak permutation *) 
+(* ================================= *) 
+
+(* Code for the permutation for a bandwidth of 1600 *)
+(* Constants for permutation *)
+fun rot_table (0,0) = 0
+  | rot_table (0,1) =    36
+  | rot_table (0,2) =     3
+  | rot_table (0,3) =    41
+  | rot_table (0,4) =    18
+  | rot_table (1,0) = 1
+  | rot_table (1,1) =    44
+  | rot_table (1,2) =    10
+  | rot_table (1,3) =    45
+  | rot_table (1,4) =     2
+  | rot_table (2,0) = 62
+  | rot_table (2,1) =    6
+  | rot_table (2,2) =    43
+  | rot_table (2,3) =    15
+  | rot_table (2,4) =    61
+  | rot_table (3,0) = 28
+  | rot_table (3,1) =   55
+  | rot_table (3,2) =    25
+  | rot_table (3,3) =    21
+  | rot_table (3,4) =    56
+  | rot_table (4,0) = 27
+  | rot_table (4,1) =   20
+  | rot_table (4,2) =    39
+  | rot_table (4,3) =     8
+  | rot_table (4,4) =    14
+  | rot_table  _    = raise TableOutOfBounds;
+
+fun rc 0 = 0x0000000000000001
+  | rc 1 = 0x0000000000008082
+  | rc 2 = 0x800000000000808A
+  | rc 3 = 0x8000000080008000
+  | rc 4 = 0x000000000000808B
+  | rc 5 = 0x0000000080000001
+  | rc 6 = 0x8000000080008081
+  | rc 7 = 0x8000000000008009
+  | rc 8 = 0x000000000000008A
+  | rc 9 = 0x0000000000000088
+  | rc 10 = 0x0000000080008009
+  | rc 11 = 0x000000008000000A
+  | rc 12 = 0x000000008000808B
+  | rc 13 = 0x800000000000008B
+  | rc 14 = 0x8000000000008089
+  | rc 15 = 0x8000000000008003
+  | rc 16 = 0x8000000000008002
+  | rc 17 = 0x8000000000000080
+  | rc 18 = 0x000000000000800A
+  | rc 19 = 0x800000008000000A
+  | rc 20 = 0x8000000080008081
+  | rc 21 = 0x8000000000008080
+  | rc 22 = 0x0000000080000001
+  | rc 23 = 0x8000000080008008
+  | rc _ = raise TableOutOfBounds;
+
+  fun theta mat = 
   let
-    val (x,y,z) = ((qx mod 5),(qy mod 5),(qz mod 64))
-    val sum1 =  (mat (x-1,0,z)) bitxor (mat (x-1,1,z)) bitxor (mat (x-1,2,z)) bitxor (mat (x-1,3,z)) bitxor (mat (x-1,4,z))
-    val sum2 =  (mat (x+1,0,z-1)) bitxor (mat (x+1,1,z-1)) bitxor (mat (x+1,2,z-1)) bitxor (mat (x+1,3,z-1)) bitxor (mat (x+1,4,z-1))
+    fun matC x =  
+      (el mat (x,0)) xor (el mat (x,1)) xor (el mat (x,2)) xor (el mat (x,3)) xor (el mat (x,4))
+    fun matD x = matC(x-1 mod 5) xor (rot(matC(x+1 mod 5),1))
   in 
-    ( mat (x,y,z)) bitxor sum1 bitxor sum2
+    apply_mat (fn (x,y,elem) => (elem xor matD(x))) mat 
   end;
 
-fun rho mat (qx,qy,qz) =
+  (* Second, third and fourth transformation combined *)
+  fun rhoAndpiAndchi mat = 
   let
-    val (x,y,z) = ((qx mod 5),(qy mod 5),(qz mod 64))
-  in
-    mat (x,y,z - (rot_table (x,y))) (* The rotation table results for an equation,
-    maybe prove the correctness of the table seperately. *)
-  end
+    fun coordinate_helper n = 
+    let
+      val x=n div 5
+      val y=n mod 5
+      val coords_in_matB = (y,((2*x+3*y) mod 5))
+    in
+        ( coords_in_matB, rot((el mat (x,y)),rot_table (x,y)))
+    end
+    val matB_list =  List.tabulate (25,coordinate_helper)
+    fun matB coord = case
+      ( List.find (fn elem => case elem of (c,_) => c=coord )
+      matB_list)
+                            of
+                               SOME((_,value)) => value
+                               |    NONE => raise CoordinatesNotInList(coord)
+    fun compute (x,y) =
+      matB(x,y) xor ( negate ( matB((x+1) mod 5,y)) andop matB((x+2) mod 5, y))
+    in 
+      apply_mat (fn (x,y,_) => compute (x,y)) gen_mat_25
+    end;
 
-fun equation_table coord =
-let
-  val coord_table = List.tabulate (25, (fn n => (n mod 5, n div 5)));
-  val coord_value_table = List.map (fn (xp,yp) => ((yp, (2*xp + 3*yp) mod
-  5),(xp,yp))) coord_table
-in
-  case ( List.find (fn elem => case elem of (c,_) => c=coord ) coord_value_table)
-  of
-     SOME((_,value)) => value
-     |    NONE       => raise CoordinatesNotInList(coord)
-end
-
-fun pi mat (qx,qy,qz) =
-  let
-    val (x,y,z) = ((qx mod 5),(qy mod 5),(qz mod 64))
-    val (xp,yp) = equation_table (x,y)
-  in
-    mat (xp,yp,z) 
-  end
-
-fun chi mat (qx,qy,qz) =
-  let
-    val (x,y,z) = ((qx mod 5),(qy mod 5),(qz mod 64))
-  in
-    mat (x,y,z) bitxor ((neg (mat (x+1,y,z))) bitand (mat (x+2,y,z)))
-  end
-
-  (* Does not work correctly, we will use constants for now, and
-  * maybe later in HOL, operations on polynomials.
-  * For now, we use the constants *)
-  (*
-fun lsfr (in1, in2, in3, in4, in5, in6, in7, in8) =
-let
-  val new = in8 bitxor (in6 bitxor (in5 bitxor in4 ))
-in
-  ((new, in1, in2, in3, in4, in5, in6, in7),in8)
-end
-
-fun lsfrout n =
-let 
-  fun helper 0=
-    (* seed *)
-     (lsfr (false, false, false, false, false, false, false, true))
-    | helper n = case (helper (n-1)) of 
-                      (state,_) => lsfr (state)
-in
-  case (helper n) of 
-       (_,out) => out
-end
-*)
-
-fun rc_old 0 = 0x0000000000000001
-  | rc_old 1 = 0x0000000000008082
-  | rc_old 2 = 0x800000000000808A
-  | rc_old 3 = 0x8000000080008000
-  | rc_old 4 = 0x000000000000808B
-  | rc_old 5 = 0x0000000080000001
-  | rc_old 6 = 0x8000000080008081
-  | rc_old 7 = 0x8000000000008009
-  | rc_old 8 = 0x000000000000008A
-  | rc_old 9 = 0x0000000000000088
-  | rc_old 10 = 0x0000000080008009
-  | rc_old 11 = 0x000000008000000A
-  | rc_old 12 = 0x000000008000808B
-  | rc_old 13 = 0x800000000000008B
-  | rc_old 14 = 0x8000000000008089
-  | rc_old 15 = 0x8000000000008003
-  | rc_old 16 = 0x8000000000008002
-  | rc_old 17 = 0x8000000000000080
-  | rc_old 18 = 0x000000000000800A
-  | rc_old 19 = 0x800000008000000A
-  | rc_old 20 = 0x8000000080008081
-  | rc_old 21 = 0x8000000000008080
-  | rc_old 22 = 0x0000000080000001
-  | rc_old 23 = 0x8000000080008008
-  | rc_old _ = raise TableOutOfBounds;
-
-  (* Probably those two tables can be proven correct w.r.t. their algebraic
-  * defintion *)
-
-fun rc i (qx,qy,qz) = 
-  let
-    val (x,y,z) = ((qx mod 5),(qy mod 5),(qz mod 64))
-    fun partial_log n = case n of 
-                      1 => 0
-                    | 2 => 1
-                    | 4 => 2
-                    | 8 => 3
-                    |16 => 4
-                    |32 => 5
-                    |64 => 6
-                    | _ => raise NotInRangeOfPartialLog
-    val j = (partial_log (z+1))
-    val t = j + (7*i)
-  in
-    if x=0 andalso y=0 then 
-      (* lsfrout(t) *)
-      List.nth ((int2bitstring (rc_old i)),z)
-    else 
-      false
-  end
-  handle
-    NotInRangeOfPartialLog => false;
-
-fun iota i mat (qx,qy,qz) =
-  let
-    val (x,y,z) = ((qx mod 5),(qy mod 5),(qz mod 64))
-  in
-    mat (x,y,z) bitxor (rc i (x,y,z))
-  end
+  fun iota i mat =
+    apply_mat (fn (x,y,elem) => case (x,y) of
+                                (0,0) => (el mat (0,0)) xor (
+                                (List.rev (int2bitstring (rc i))))
+                               |(_,_) => elem )
+                                mat;
 
 (* transition for round i *)
 fun round i block = 
   (* First transformation *)
     if i>=  24 then block
     else 
-      round (i+1) (iota i (rho(pi(chi(theta(block))))))
+      round (i+1) (iota i (rhoAndpiAndchi(theta(block))))
 
 fun permutation1600 (block:bitstring) =
   if List.length(block) <> 1600 then
     raise BlockOfWrongSize
   else
-    funmatrix2list(round 0 (list2funmatrix block));
+      matrix2list (round 0 (list2matrix block));
 
-(* Sponge Construction *)
+(* Part IV - The Sponge Construction *) 
+(* ================================= *) 
 
 fun multiratepad r (m:bitstring) = 
 let
@@ -384,29 +369,32 @@ in
   truncated_sponge permutation bitrate capacity trunc (padding m)
   end;
 
+(* Part V - Test Vectors *) 
+(* ===================== *) 
+
+(* Testing - tools for manual checks *)
+val print_bits = List.foldr (fn (el,str) => case el of false => "0"^" "^str | true => "1"^" "^str) ""
+
 (* Sponge (to be checked manually)*)
-fun zeromatrix (x,y,z) = false;
-fun firstround mat = (iota 0 (chi(pi(rho(theta(mat))))));
-fun secondround mat = (iota 1 (chi(pi(rho(theta(mat))))));
-fun thirdround mat = (iota 2 (chi(pi(rho(theta(mat))))));
+(*
+val zeromatrix = list2matrix (repeat 1600 false);
+fun firstround mat = (iota 0 (rhoAndpiAndchi(theta(mat))));
+fun secondround mat = (iota 1 (rhoAndpiAndchi(theta(mat))));
 fun permute mat = round 0 mat;
 
-print_funmat (firstround zeromatrix);
-print_funmat (theta(firstround zeromatrix));
-print_funmat ( rho ( theta ( firstround zeromatrix)));
-print_funmat ( pi (rho ( theta ( firstround zeromatrix))));
-print_funmat ( chi (pi (rho ( theta ( firstround
-zeromatrix)))));
-print_funmat ( thirdround (secondround(firstround
-zeromatrix)));
-(* until here it works out .. *)
-
-fun zeromatrix (x,y,z) = 0;
-print_funmat (permute (zeromatrix2));
+print_mat (firstround zeromatrix);
+print_mat (theta(firstround zeromatrix));
+print_mat (rhoAndpiAndchi( theta(firstround zeromatrix)));
+print_mat (secondround(firstround zeromatrix));
+print_mat (permute zeromatrix);
+pp2 (matrix2list (permute zeromatrix));
+print_mat (permute zeromatrix);
+print_mat (list2matrix (matrix2list (permute zeromatrix)));
+pp2 (matrix2list (permute( permute zeromatrix))); *)
 
 (* padding an bit representation *)
-val m = pinp("53587BC8");
-val m2 = pinp (
+val m = pi("53587BC8");
+val m2 = pi (
   "724627916C50338643E6996F07877EAFD96BDF01DA7E991D4155B9BE1295EA7D21C93"^
   "91F4C4A41C"^
   "75F77E5D27389253393725F1427F57914B273AB862B9E31DABCE506E558720520D333"^
@@ -416,13 +404,6 @@ val m2 = pinp (
   "5BD280E4FBCB0161E1A82470320CEC6ECFA25AC73D09F1536F286D3F9DACAFB2CD1D0"^
   "CE72D64D197F5C7520B3CCB2FD74EB72664BA93853EF41EABF52F015DD591500D018D"^
   "D162815CC993595B195");
-val test345val = 
-  "E7B462FE88FE41B20C5E11D2125D1788383CC5C0EC7E9E8AEF1A7532E4C4BF255D799"^
-  "64365C9718064F9F776CACA03E930E649FC659488A349D011BE38332F86DC4F3B36D7"^
-  "A58D7996D7D8A06AB26E8E4C6525B8DC47D0121CDCE1CADB52AB02BCF2E7C5EFA8088"^
-  "0C7F2BDBE820C985BAE0519A597FA0F50698D3FB970D07B5BCFA9F928C55827A750DA"^
-  "8C2ABCC5E8D29F50ECD2AA52FD50DDFD2B9E24D8048F4E4A97D989A555483B34812BF"^
-  "EEC0A8EC70BD0DA79486607B88A71177B7AF3DEE4A1D8E670941B34";
 
 val test1 = ( m = [true, true, false, false, true, false, true, false, false, false, false,
     true, true, false, true, false, true, true, false, true, true, true,
@@ -435,6 +416,13 @@ val test2 = ( (pp(multiratepad 1152 m)) =
   "000000000080"
   )
 
+val test345val = 
+  "E7B462FE88FE41B20C5E11D2125D1788383CC5C0EC7E9E8AEF1A7532E4C4BF255D799"^
+  "64365C9718064F9F776CACA03E930E649FC659488A349D011BE38332F86DC4F3B36D7"^
+  "A58D7996D7D8A06AB26E8E4C6525B8DC47D0121CDCE1CADB52AB02BCF2E7C5EFA8088"^
+  "0C7F2BDBE820C985BAE0519A597FA0F50698D3FB970D07B5BCFA9F928C55827A750DA"^
+  "8C2ABCC5E8D29F50ECD2AA52FD50DDFD2B9E24D8048F4E4A97D989A555483B34812BF"^
+  "EEC0A8EC70BD0DA79486607B88A71177B7AF3DEE4A1D8E670941B34";
 
 val test3 =
  (pp(permutation1600((repeat 1600 false) xor ((multiratepad 1152 m)@(repeat
