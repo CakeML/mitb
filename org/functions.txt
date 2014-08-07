@@ -23,6 +23,11 @@ The specification is defined in mitbScript.sml, in MITB_STEP_def. The type of th
 function is likely to change in the near future, as the state will probably contain
 an additional bool for the state of the button.
 
+3. The communication to the host computer.
+
+I think this depends on the hardware platform, but PROTO_def in mitbScript.sml
+defines the behaviour for a single communication step.
+
 
 
 
