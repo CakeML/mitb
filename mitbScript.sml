@@ -313,21 +313,6 @@ rw [numposrepTheory.l2n_def] >>
 simp [EXP]
 );
 
-val BITS_TO_WORD_APPEND = store_thm("BITS_TO_WORD_APPEND",
-``(BITS_TO_WORD (a++b):'r word ) =
-((BITS_TO_WORD a:'r word) || ((BITS_TO_WORD b)<< (LENGTH a)))``,
-rw [BITS_TO_WORD_def, word_from_bin_list_def,
-    l2w_def] >>
-rw [l2n_APPEND] >>
-rw [WORD_MUL_LSL ] >>
-rw [GSYM word_add_n2w] >>
-qpat_abbrev_tac `A=l2n 2 (MAP (\e. if e then 1 else 0) a)` >>
-qpat_abbrev_tac `B=l2n 2 (MAP (\e. if e then 1 else 0) b)` >>
-rw [word_mul_n2w] >>
-cheat 
-(* WORD_SLICE_COMP_THM *)
-);
-
 (*
 The previous statement holds for BITS_TO_WORD, too.
 REMARK: word_from_bin_list translates from num list, where BITS_TO_WORD
