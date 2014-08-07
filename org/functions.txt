@@ -1,0 +1,28 @@
+HOL functions that will be translated to CakeML:
+
+1. The permutation
+
+An implementation is defined in keccak_funScript.sml, in permutation_def.
+
+The specification is defined in keccak_hol.sml, in permutation1600. This is SML-Code.
+I will rewrite this in HOL in the file keccakpermutationScript.sml.
+
+These files have been created last summer, so the types don't match the current
+model. The type of the permutation in the spec will be:
+   ( ('r+'c) word -> ('r+'c) word)
+with r = 1151 and c = 448.
+
+The type of the implementation will be whatver represents 1600 bits well enough.
+
+When in doubt, the SML-Code of the specification is correct, because I've validated
+it with the official test vectors.
+
+2. The MITB Step-function.
+
+The specification is defined in mitbScript.sml, in MITB_STEP_def. The type of this
+function is likely to change in the near future, as the state will probably contain
+an additional bool for the state of the button.
+
+
+
+
