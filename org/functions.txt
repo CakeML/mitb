@@ -4,7 +4,7 @@ HOL functions that will be translated to CakeML:
 
 An implementation is defined in keccak_funScript.sml, in permutation_def.
 
-The specification is defined in keccak_hol.sml, in permutation1600. This is SML-Code.
+The specification is defined in keccak.sml, in permutation1600. This is SML-Code.
 I will rewrite this in HOL in the file keccakpermutationScript.sml.
 
 These files have been created last summer, so the types don't match the current
