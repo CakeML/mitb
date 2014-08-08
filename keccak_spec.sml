@@ -148,24 +148,25 @@ in
     end
 end;
 
+fun apply_numbered f lst=
+    case
+     (List.foldr (fn (el,(x,lst)) => (x-1,(f(x,el)::lst)))
+     (List.length(lst)-1,[]) lst )
+     of
+         (_,res) => res;
+
+fun apply_mat f mat=
+    apply_numbered (fn (y,row) => apply_numbered (fn (x,el) => f(x,y,el)) row )
+    mat;
+fun funmatrix2listmatrix mat =
+  apply_mat (fn (x,y,_) => List.tabulate (64,(fn z => mat(x,y,z))))
+  gen_mat_25;
+
 (* Pretty printing for matrixes. Words are shown reversed, i.e., msb at the
 * front. *)
 fun print_mat block =
 let 
   val gen_mat_25 = List.tabulate (5, (fn x => List.tabulate(5, (fn y => (x,y)))))
-  fun apply_numbered f lst=
-      case
-       (List.foldr (fn (el,(x,lst)) => (x-1,(f(x,el)::lst)))
-       (List.length(lst)-1,[]) lst )
-       of
-           (_,res) => res;
-
-  fun apply_mat f mat=
-      apply_numbered (fn (y,row) => apply_numbered (fn (x,el) => f(x,y,el)) row )
-      mat;
-  fun funmatrix2listmatrix mat =
-    apply_mat (fn (x,y,_) => List.tabulate (64,(fn z => mat(x,y,z))))
-    gen_mat_25;
   fun format_bs el = 
     (*
       let 
