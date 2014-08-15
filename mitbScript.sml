@@ -870,7 +870,6 @@ val PROTO_def =
           (* Give adversary blackbox access when corrupted, but
            *  not complete: she is not allowed to set the key.
            * TODO: would be nicer if we would check the ready state via the LED
-           *
            *  *)
           (* Ignore Key-overwrite *)
           ( PROTO mitbf ((Ready,cntl,vmem),T) (AtoP (F,F,inp,len)) =

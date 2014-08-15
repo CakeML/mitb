@@ -9,7 +9,7 @@ open wordsLib;
 open lcsymtacs;
 ;
 
-val _ = numLib.prefer_num()
+val _ = numLib.prefer_num();
 
 val _ = new_theory "keccakpermutation";
 
@@ -35,27 +35,33 @@ FCP i. let z=i MOD 64 in
 )`;
 
 (* Tactic that performs case split for all numbers from 0 to n *)
-fun split_num_in_range t n (g as (asl,w)) =
+fun split_num_in_range_then t m n tac (g as (asl,w)) =
   let
     val eq = (mk_eq (t,(numSyntax.mk_numeral (Arbnum.fromInt
 n))))
     val ineq = 
-      if (n>0) then
+      if (n>m) then
         list_mk_comb (Term `$<=`, [t, numSyntax.mk_numeral (Arbnum.fromInt
   (n-1))])
       else (Term `F`)
     val term = mk_disj (eq, ineq) 
     val termimp = list_mk_imp (asl,term)
   in
-    (if n>0 then
+    (if n>m then
       mp_tac (prove(termimp, simp [])) >>
       rw [] 
-      >| [all_tac,  split_num_in_range t (n-1)]
+      >| [tac,  split_num_in_range_then t m (n-1) tac]
      else
-       all_tac)
-  end g;
-fun qsplit_num_in_range q n = Q_TAC (fn t => split_num_in_range t n) q
+       tac)
+  end
+  g;
+fun qsplit_num_in_range_then q m n tac =
+  Q_TAC (fn t => split_num_in_range_then t m n tac) q;
+fun qsplit_num_in_range q m n =
+  qsplit_num_in_range_then q m n all_tac;
 
+
+(* TODO *)
 (* Sanity check: transformation translates back correctly *)
 val matrix_representation2word_word2matrix_representation = prove(``
 ! w:1600 word. 
@@ -64,15 +70,11 @@ matrix_representation2word  (word2matrix_representation w)
 ``,
 simp [matrix_representation2word_def, word2matrix_representation_def] >>
 rw [GSYM WORD_EQ, word_bit_def, fcpTheory.FCP_BETA]  >>
-qsplit_num_in_range `x` 1600 >>
-fs []
-
-`(x=0)\/(x=1)\/(x=2)\/(x=3)\/(x>3)` by simp []
-
+simp [] >>
+(* brute force *)
+ qsplit_num_in_range_then `x` 0 1600 (fs [])
+(* Can be shown this way, but it takes ages! *)
 );
-
-
-
 
 val BSUM_def = Define`
 (! f.  BSUM 0 f  = F)
@@ -177,7 +179,7 @@ val ntimes_def = Define `
 /\
 (ntimes 0 f  = (\x.x))`
 
-val lsfr_comp = Define `
+val lsfr_comp_def = Define `
 (lsfr_comp 0 =  ((0b10000000w:word8),T))
 /\
 (lsfr_comp (SUC n) = 
@@ -226,6 +228,11 @@ val round_constants_def = Define `
 (round_constants 23 = 0x8000000080008008w)
 `
 
+val round_constant_matrix_def = Define `
+( round_constant_matrix i (0,0,z) = word_bit z (round_constants i) )
+/\
+( round_constant_matrix i (x,y,z) = F)`
+
 val IsKeccakroundconstant_def = Define `
 IsKeccakroundconstant RC =
 ! i x y z.
@@ -242,35 +249,56 @@ IsKeccakroundconstant RC =
    ==> (RC i (x,y,z) = F ))
 `
 
-
-
-
 val round_constants_correctness = prove(``
-IsKeccakroundconstant (word2matrix_representation o round_constants )
+IsKeccakroundconstant (round_constant_matrix)
 ``,
-rw [IsKeccakroundconstant_def, word2matrix_representation_def] >>
-Cases_on `i=0` >>
-simp [round_constants_def] >>
-qexists_tac `LOG 2 (z+1) ` >>
-rw [] >>
-
-Cases_on `x=4` >>
-Cases_on `y=4` >>
-Cases_on `z=63` >>
-fs []
-rw []
-EVAL_TAC
-
-qsplit_num_in_range `y` 4 >>
-qsplit_num_in_range `x` 4 >>
-qsplit_num_in_range `z` 63 >>
-EVAL_TAC
-
-`(z=63) \/ (z <= 62)` by simp []
-
-BasicProvers.EVERY_CASE_TAC >>
-
-EVAL ``LOG 2 8``
+rw [IsKeccakroundconstant_def]
+>- (
+  qexists_tac `LOG 2 (z+1) ` >>
+  rw [] >>
+  Cases_on `x` >>
+  Cases_on `y` >>
+  rw [round_constant_matrix_def] >>
+  qsplit_num_in_range_then `i` 0 23 (rw [round_constants_def])>>
+  qsplit_num_in_range_then `LOG 2 (z+1)` 0 6 (rw [rc_def,lsfr_comp_def])>>
+  EVAL_TAC
+  )
+>>
+`(z<>0) /\ 
+ (z<>1) /\ 
+ (z<>3) /\ 
+ (z<>7) /\ 
+ (z<>15) /\ 
+ (z<>31) /\ 
+ (z<>63)` by (spose_not_then 
+ (
+ fn th => 
+  (pop_assum (mp_tac) >> 
+   assume_tac th  >>
+    rw [] >>
+   qexists_tac `LOG 2 (z+1)` >>
+   Cases_on `z=0` >>
+   Cases_on `z=1` >>
+   Cases_on `z=3` >>
+   Cases_on `z=7` >>
+   Cases_on `z=15` >>
+   Cases_on `z=31` >>
+   Cases_on `z=63` >>
+   fs []
+    )
+ )
+ ) >>
+  Cases_on `x` >>
+  Cases_on `y` >>
+  rw [round_constant_matrix_def] >>
+  qsplit_num_in_range_then `i` 0  23 (rw [round_constants_def])>>
+  qsplit_num_in_range_then `z` 31 62 (fs [rc_def,lsfr_comp_def])>>
+  qsplit_num_in_range_then `z` 15 30 (fs [rc_def,lsfr_comp_def])>>
+  qsplit_num_in_range_then `z` 7 14 (fs [rc_def,lsfr_comp_def])>>
+  qsplit_num_in_range_then `z` 3 6 (fs [rc_def,lsfr_comp_def])>>
+  `( z=2 )` by simp [] >>
+  fs []
+);
 
 
 
