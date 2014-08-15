@@ -7,6 +7,7 @@ open wordsTheory;
 open listTheory;
 open wordsLib;
 open lcsymtacs;
+open fcpTheory;
 ;
 
 val _ = numLib.prefer_num()
@@ -50,6 +51,31 @@ val theta_def = Define`
     ( (( mat (x,y,z) ) <> sum1) <>  sum2)
 )
 `;
+
+
+val matrix_0123_def= Define`
+matrix_0123 =  
+(FCP i . 
+   if i=0 then 
+      (FCP j. if j=0 then 0 else 1 )
+   else 
+      (FCP j. if j=0 then 2 else 3)
+     ): num [2][2]
+     `;
+
+     let matrix_mul = new_definition
+       `!A:real^N^M B:real^P^N.
+               A ** B = lambda i j. sum(1..dimindex(:N)) (\k. A$i$k * B$k$j)`;;
+
+
+val MAT_MUL_def = Define`
+MATMUL (A: num ['n]['m]) (B : num ['n] ['p]) =
+((FCP i j . SUM (dimindex(:'n))
+(\r . (A ' i ' r) * (B ' r ' j))
+): num ['m] ['p])
+`;
+
+val _ = overload_on ("*", Term`$MATMUL`);
 
 val rho_def = Define`
 rho mat (qx,qy,qz) =
@@ -119,3 +145,6 @@ IsKeccakpermutation1600 f =
 (f = ntimes 24 (round RC))`
 
 val _ = export_theory();
+
+(* vim: tw=72:comments=sr\:(*,m\:\ ,exr\:*)
+ *  *)
