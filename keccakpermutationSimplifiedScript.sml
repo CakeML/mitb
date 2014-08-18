@@ -7,6 +7,7 @@ open wordsTheory;
 open listTheory;
 open wordsLib;
 open lcsymtacs;
+open fcpTheory;
 ;
 
 val _ = numLib.prefer_num();
@@ -16,22 +17,18 @@ val _ = new_theory "keccakpermutation";
 (* translated from keccak_spec.sml *)
 
 val word2matrix_representation_def = Define`
-word2matrix_representation w  = 
-  (\(qx,qy,qz) .
-      let 
-        (x,y,z) = ((qx MOD 5),(qy MOD 5),(qz MOD 64))
-      in
-        (w ' (64*(5*y + x) + z))
-      )
+word2matrix_representation (w: 1600 word)  = 
+(FCP x y z .  (w ' (64*(5*y + x) + z))) : word64 [5] [5]
 `;
 
 val matrix_representation2word_def = Define`
-(matrix_representation2word mat) = 
+(matrix_representation2word (mat: word64 [5] [5]) = 
 (
 FCP i. let z=i MOD 64 in
        let x=((i-z) MOD 320) DIV 64 in
        let y=(i - (64*x) - z) DIV 320 in
-         mat (x,y,z)
+         mat ' x ' y ' z
+): 1600 word
 )`;
 
 (* Tactic that performs case split for all numbers from 0 to n *)
@@ -61,7 +58,7 @@ fun qsplit_num_in_range q m n =
   qsplit_num_in_range_then q m n all_tac;
 
 
-(* TODO *)
+(* TODO check if this still holds *)
 (* Sanity check: transformation translates back correctly *)
 val matrix_representation2word_word2matrix_representation = prove(``
 ! w:1600 word. 
@@ -83,12 +80,12 @@ val BSUM_def = Define`
 `;
 
 val theta_def = Define`
-( theta mat (qx,qy,qz) )= 
-(
-  let (x,y,z) = ((qx MOD 5),(qy MOD 5),(qz MOD 64)) in
-    let sum1 = BSUM 4 (\y'.  mat (x-1,y',z)) in
-    let sum2 = BSUM 4 (\y'.  mat (x+1,y',z-1)) in 
-    ( (( mat (x,y,z) ) <> sum1) <>  sum2)
+( theta (mat: word64 [5] [5])= 
+(FCP x y z . 
+    let sum1 = BSUM 4 (\y'.  mat ' (x-1) ' y' ' z) in
+    let sum2 = BSUM 4 (\y'.  mat ' (x+1) ' y' ' (z-1)) in 
+    (( (( mat ' x ' y ' z) ) <> sum1) <>  sum2)
+) : word64 [5] [5]
 )
 `;
 
@@ -144,31 +141,57 @@ val rot_table_def = Define `
 (rot_table (4,4) =    14)
 `;
 
+val matrix_0123_def= Define`
+matrix_0123 =  
+(FCP i . 
+   if i=0 then 
+      (FCP j. if j=0 then 0 else 1 )
+   else 
+      (FCP j. if j=0 then 2 else 3)
+     ): num [2][2]
+     `;
+
+
+val MAT_MUL_def = Define`
+MATMUL (A: num ['n]['m]) (B : num ['n] ['p]) =
+((FCP i j . SUM (dimindex(:'n))
+(\r . (A ' i ' r) * (B ' r ' j))
+): num ['m] ['p])
+`;
+
+val _ = overload_on ("*", Term`$MATMUL`);
+
+
+(* TODO correctness of rot_table *)
 val rho_def = Define`
-rho mat (qx,qy,qz) =
-  let (x,y,z) = ((qx MOD 5),(qy MOD 5),(qz MOD 64)) in
-    mat (x,y, (z - rot_table (x,y)))
+rho (mat: word64 [5] [5]) =
+(FCP x y z . mat ' x ' y ' (z - rot_table (x,y))): word64 [5] [5]
 `   
 
 val pi_def = Define`
-pi mat (qx,qy,qz) =
-  let (x,y,z) = ((qx MOD 5),(qy MOD 5),(qz MOD 64)) in
-    let (x',y') = CHOICE (\(x',y'). T (* TODO put the other matrix
-    multiplication here *))
+pi (mat: word64 [5] [5])  =
+(
+FCP x y .
+    let (x',y') = CHOICE (\(x',y'). 
+      (FCP i j:num . if i=0 then x:num else y:num) =
+     ( matrix_0123 * (FCP i j:num . if i=0 then x' else y'): num [2] [1])
+    )
   in
-    mat (x',y',z) 
+    mat ' (x') ' (y') 
+): word64 [5] [5]
 `   
 
 val chi_def = Define `
-chi mat (qx,qy,qz) =
-  let (x,y,z) = ((qx MOD 5),(qy MOD 5),(qz MOD 64)) in
-    (mat (x,y,z))  <> ((~ (mat (x+1,y,z))) /\ (mat (x+2,y,z)))
+chi (mat: word64 [5] [5]) =
+(
+FCP x y z .
+    (mat ' x ' y ' z)  <> ((~ (mat ' (x+1) ' y ' z))) /\ (mat ' (x+2) ' y ' z)
+): word64 [5] [5]
 `
 
 val iota_def = Define `
-iota RC i mat (qx,qy,qz) =
-  let (x,y,z) = ((qx MOD 5),(qy MOD 5),(qz MOD 64)) in
-    mat (x,y,z) <> (RC i (x,y,z))
+iota RC i (mat: word64 [5] [5])  =
+    (FCP x y z . (mat ' x ' y ' z) <> ((RC i) ' x ' y ' z)): word64 [5] [5]
     `
 
 val round_def = Define `
@@ -229,9 +252,10 @@ val round_constants_def = Define `
 `
 
 val round_constant_matrix_def = Define `
-( round_constant_matrix i (0,0,z) = word_bit z (round_constants i) )
-/\
-( round_constant_matrix i (x,y,z) = F)`
+round_constant_matrix i =
+(FCP x y z . 
+  if (x=0) /\ (y=0) then word_bit z (round_constants i)
+  else F ): word64 [5] [5]`;
 
 val IsKeccakroundconstant_def = Define `
 IsKeccakroundconstant RC =
@@ -239,14 +263,14 @@ IsKeccakroundconstant RC =
 ((i <= 23) /\ (x <= 4)/\ (y <= 4) /\ (z <= 63))
 ==>
  (? j . ((j <= 6) /\ (z=2**j -1))  ==> 
-   ((RC i (x,y,z)) = 
+   (((RC i) ' x ' y ' z ) = 
     (if ((x=0) /\ (y=0)) then
      rc (j+7*i)
     else F ))
  )
  /\
  ( (~(? j . ((j <= 6) /\ (z=2**j -1))))
-   ==> (RC i (x,y,z) = F ))
+   ==> ((RC i) ' x ' y ' z  = F ))
 `
 
 val round_constants_correctness = prove(``
@@ -258,7 +282,7 @@ rw [IsKeccakroundconstant_def]
   rw [] >>
   Cases_on `x` >>
   Cases_on `y` >>
-  rw [round_constant_matrix_def] >>
+  simp [round_constant_matrix_def, FCP_BETA] >>
   qsplit_num_in_range_then `i` 0 23 (rw [round_constants_def])>>
   qsplit_num_in_range_then `LOG 2 (z+1)` 0 6 (rw [rc_def,lsfr_comp_def])>>
   EVAL_TAC
@@ -290,7 +314,7 @@ rw [IsKeccakroundconstant_def]
  ) >>
   Cases_on `x` >>
   Cases_on `y` >>
-  rw [round_constant_matrix_def] >>
+  simp [round_constant_matrix_def, FCP_BETA] >>
   qsplit_num_in_range_then `i` 0  23 (rw [round_constants_def])>>
   qsplit_num_in_range_then `z` 31 62 (fs [rc_def,lsfr_comp_def])>>
   qsplit_num_in_range_then `z` 15 30 (fs [rc_def,lsfr_comp_def])>>
@@ -300,16 +324,11 @@ rw [IsKeccakroundconstant_def]
   fs []
 );
 
-
-
- 
 val IsKeccakpermutation1600_def = Define `
 IsKeccakpermutation1600 f =
-? RC .
+? RC: num -> word64 [5] [5] .
 (IsKeccakroundconstant RC)
 /\
-(f = ntimes 24 (round RC))`
-
-
+(f = ntimes 24 (round RC))`;
 
 val _ = export_theory();
