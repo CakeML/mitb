@@ -8,6 +8,7 @@ open listTheory;
 open wordsLib;
 open lcsymtacs;
 open fcpTheory;
+open intLib;
 ;
 
 val _ = numLib.prefer_num();
@@ -58,20 +59,18 @@ fun qsplit_num_in_range q m n =
   qsplit_num_in_range_then q m n all_tac;
 
 
-(* TODO check if this still holds *)
 (* Sanity check: transformation translates back correctly *)
-val matrix_representation2word_word2matrix_representation = prove(``
-! w:1600 word. 
-matrix_representation2word  (word2matrix_representation w)
-= w
-``,
-simp [matrix_representation2word_def, word2matrix_representation_def] >>
-rw [GSYM WORD_EQ, word_bit_def, fcpTheory.FCP_BETA]  >>
-simp [] >>
-(* brute force *)
- qsplit_num_in_range_then `x` 0 1600 (fs [])
-(* Can be shown this way, but it takes ages! *)
-);
+(* val matrix_representation2word_word2matrix_representation = prove(`` *)
+(* ! w:1600 word. *) 
+(* matrix_representation2word  (word2matrix_representation w) *)
+(* = w *)
+(* ``, *)
+(* simp [matrix_representation2word_def, word2matrix_representation_def] >> *)
+(* rw [GSYM WORD_EQ, word_bit_def, fcpTheory.FCP_BETA]  >> *)
+(* simp [] >> *)
+(* (1* brute force --  Can be shown this way, but it takes ages! *1) *)
+(* qsplit_num_in_range_then `x` 0 1599 (simp [FCP_BETA]) *)
+(* ); *)
 
 val BSUM_def = Define`
 (! f.  BSUM 0 f  = F)
@@ -89,58 +88,6 @@ val theta_def = Define`
 )
 `;
 
-val rot_table_def = Define `
-(rot_table (0,0) = 0)
-/\
-(rot_table (0,1) =    36)
-/\
-(rot_table (0,2) =     3)
-/\
-(rot_table (0,3) =    41)
-/\
-(rot_table (0,4) =    18)
-/\
-(rot_table (1,0) = 1)
-/\
-(rot_table (1,1) =    44)
-/\
-(rot_table (1,2) =    10)
-/\
-(rot_table (1,3) =    45)
-/\
-(rot_table (1,4) =     2)
-/\
-(rot_table (2,0) = 62)
-/\
-(rot_table (2,1) =    6)
-/\
-(rot_table (2,2) =    43)
-/\
-(rot_table (2,3) =    15)
-/\
-(rot_table (2,4) =    61)
-/\
-(rot_table (3,0) = 28)
-/\
-(rot_table (3,1) =   55)
-/\
-(rot_table (3,2) =    25)
-/\
-(rot_table (3,3) =    21)
-/\
-(rot_table (3,4) =    56)
-/\
-(rot_table (4,0) = 27)
-/\
-(rot_table (4,1) =   20)
-/\
-(rot_table (4,2) =    39)
-/\
-(rot_table (4,3) =     8)
-/\
-(rot_table (4,4) =    14)
-`;
-
 val matrix_0123_def= Define`
 matrix_0123 =  
 (FCP i . 
@@ -151,8 +98,13 @@ matrix_0123 =
      ): num [2][2]
      `;
 
+val matrix_id_def= Define`
+matrix_id =  
+(FCP i j . if i=j then 1 else 0)
+     `;
 
-val MAT_MUL_def = Define`
+
+val MATMUL_def = Define`
 MATMUL (A: num ['n]['m]) (B : num ['n] ['p]) =
 ((FCP i j . SUM (dimindex(:'n))
 (\r . (A ' i ' r) * (B ' r ' j))
@@ -161,12 +113,40 @@ MATMUL (A: num ['n]['m]) (B : num ['n] ['p]) =
 
 val _ = overload_on ("*", Term`$MATMUL`);
 
+val MATPOT_def = Define`
+(MATPOT (A: num ['n]['n]) 0  = matrix_id)
+/\
+(MATPOT (A: num ['n]['n]) (SUC i)  = (A * (MATPOT A i)))
+`
+;
+
+val _ = overload_on ("**", Term`$MATPOT`);
 
 (* TODO correctness of rot_table *)
-val rho_def = Define`
+(* val rho_def = Define`
 rho (mat: word64 [5] [5]) =
 (FCP x y z . mat ' x ' y ' (z - rot_table (x,y))): word64 [5] [5]
 `   
+*)
+
+val rho_def = Define`
+rho (mat: word64 [5] [5]) =
+(FCP x y z . 
+if (x=0) /\ (y=0) then
+mat ' x ' y ' (z - (0)*(1) DIV 2)
+else 
+let t = CHOICE (\t.
+  (
+    (0 <= t) /\ (t<24) /\ 
+    (
+  (matrix_0123 ** t) * ((FCP i j. if i=0 then 1 else 0): num [2] [1]) = 
+        (FCP i j:num . if i=0 then x:num else y:num): num [2] [1]
+    )
+  ) 
+) in
+mat ' x ' y ' (z - (t+1)*(t+2) DIV 2)
+): word64 [5] [5]
+`;
 
 val pi_def = Define`
 pi (mat: word64 [5] [5])  =
@@ -179,7 +159,7 @@ FCP x y .
   in
     mat ' (x') ' (y') 
 ): word64 [5] [5]
-`   
+`;
 
 val chi_def = Define `
 chi (mat: word64 [5] [5]) =
@@ -187,20 +167,20 @@ chi (mat: word64 [5] [5]) =
 FCP x y z .
     (mat ' x ' y ' z)  <> ((~ (mat ' (x+1) ' y ' z))) /\ (mat ' (x+2) ' y ' z)
 ): word64 [5] [5]
-`
+`;
 
 val iota_def = Define `
 iota RC i (mat: word64 [5] [5])  =
     (FCP x y z . (mat ' x ' y ' z) <> ((RC i) ' x ' y ' z)): word64 [5] [5]
-    `
+    `;
 
 val round_def = Define `
-round RC i = (iota RC i) o rho o pi o chi o theta `
+round RC i = (iota RC i) o rho o pi o chi o theta `;
 
 val ntimes_def = Define `
 (ntimes (SUC n) f  = (ntimes n f) o (f n))
 /\
-(ntimes 0 f  = (\x.x))`
+(ntimes 0 f  = (\x.x))`;
 
 val lsfr_comp_def = Define `
 (lsfr_comp 0 =  ((0b10000000w:word8),T))
@@ -249,7 +229,7 @@ val round_constants_def = Define `
 (round_constants 21 = 0x8000000000008080w) /\
 (round_constants 22 = 0x0000000080000001w) /\
 (round_constants 23 = 0x8000000080008008w)
-`
+`;
 
 val round_constant_matrix_def = Define `
 round_constant_matrix i =
@@ -271,58 +251,58 @@ IsKeccakroundconstant RC =
  /\
  ( (~(? j . ((j <= 6) /\ (z=2**j -1))))
    ==> ((RC i) ' x ' y ' z  = F ))
-`
+`;
 
-val round_constants_correctness = prove(``
-IsKeccakroundconstant (round_constant_matrix)
-``,
-rw [IsKeccakroundconstant_def]
->- (
-  qexists_tac `LOG 2 (z+1) ` >>
-  rw [] >>
-  Cases_on `x` >>
-  Cases_on `y` >>
-  simp [round_constant_matrix_def, FCP_BETA] >>
-  qsplit_num_in_range_then `i` 0 23 (rw [round_constants_def])>>
-  qsplit_num_in_range_then `LOG 2 (z+1)` 0 6 (rw [rc_def,lsfr_comp_def])>>
-  EVAL_TAC
-  )
->>
-`(z<>0) /\ 
- (z<>1) /\ 
- (z<>3) /\ 
- (z<>7) /\ 
- (z<>15) /\ 
- (z<>31) /\ 
- (z<>63)` by (spose_not_then 
- (
- fn th => 
-  (pop_assum (mp_tac) >> 
-   assume_tac th  >>
-    rw [] >>
-   qexists_tac `LOG 2 (z+1)` >>
-   Cases_on `z=0` >>
-   Cases_on `z=1` >>
-   Cases_on `z=3` >>
-   Cases_on `z=7` >>
-   Cases_on `z=15` >>
-   Cases_on `z=31` >>
-   Cases_on `z=63` >>
-   fs []
-    )
- )
- ) >>
-  Cases_on `x` >>
-  Cases_on `y` >>
-  simp [round_constant_matrix_def, FCP_BETA] >>
-  qsplit_num_in_range_then `i` 0  23 (rw [round_constants_def])>>
-  qsplit_num_in_range_then `z` 31 62 (fs [rc_def,lsfr_comp_def])>>
-  qsplit_num_in_range_then `z` 15 30 (fs [rc_def,lsfr_comp_def])>>
-  qsplit_num_in_range_then `z` 7 14 (fs [rc_def,lsfr_comp_def])>>
-  qsplit_num_in_range_then `z` 3 6 (fs [rc_def,lsfr_comp_def])>>
-  `( z=2 )` by simp [] >>
-  fs []
-);
+(* val round_constants_correctness = prove(`` *)
+(* IsKeccakroundconstant (round_constant_matrix) *)
+(* ``, *)
+(* rw [IsKeccakroundconstant_def] *)
+(* >- ( *)
+(*   qexists_tac `LOG 2 (z+1) ` >> *)
+(*   rw [] >> *)
+(*   Cases_on `x` >> *)
+(*   Cases_on `y` >> *)
+(*   simp [round_constant_matrix_def, FCP_BETA] >> *)
+(*   qsplit_num_in_range_then `i` 0 23 (rw [round_constants_def])>> *)
+(*   qsplit_num_in_range_then `LOG 2 (z+1)` 0 6 (rw [rc_def,lsfr_comp_def])>> *)
+(*   EVAL_TAC *)
+(*   ) *)
+(* >> *)
+(* `(z<>0) /\ *) 
+(*  (z<>1) /\ *) 
+(*  (z<>3) /\ *) 
+(*  (z<>7) /\ *) 
+(*  (z<>15) /\ *) 
+(*  (z<>31) /\ *) 
+(*  (z<>63)` by (spose_not_then *) 
+(*  ( *)
+(*  fn th => *) 
+(*   (pop_assum (mp_tac) >> *) 
+(*    assume_tac th  >> *)
+(*     rw [] >> *)
+(*    qexists_tac `LOG 2 (z+1)` >> *)
+(*    Cases_on `z=0` >> *)
+(*    Cases_on `z=1` >> *)
+(*    Cases_on `z=3` >> *)
+(*    Cases_on `z=7` >> *)
+(*    Cases_on `z=15` >> *)
+(*    Cases_on `z=31` >> *)
+(*    Cases_on `z=63` >> *)
+(*    fs [] *)
+(*     ) *)
+(*  ) *)
+(*  ) >> *)
+(*   Cases_on `x` >> *)
+(*   Cases_on `y` >> *)
+(*   simp [round_constant_matrix_def, FCP_BETA] >> *)
+(*   qsplit_num_in_range_then `i` 0  23 (rw [round_constants_def])>> *)
+(*   qsplit_num_in_range_then `z` 31 62 (fs [rc_def,lsfr_comp_def])>> *)
+(*   qsplit_num_in_range_then `z` 15 30 (fs [rc_def,lsfr_comp_def])>> *)
+(*   qsplit_num_in_range_then `z` 7 14 (fs [rc_def,lsfr_comp_def])>> *)
+(*   qsplit_num_in_range_then `z` 3 6 (fs [rc_def,lsfr_comp_def])>> *)
+(*   `( z=2 )` by simp [] >> *)
+(*   fs [] *)
+(* ); *)
 
 val IsKeccakpermutation1600_def = Define `
 IsKeccakpermutation1600 f =
